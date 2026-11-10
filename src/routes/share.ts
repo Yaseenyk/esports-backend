@@ -48,6 +48,8 @@ share.get("/public/pass/:token", async (c) => {
     .first<{ id: string; name: string; team: string | null; role: string; zones: string; has_photo: number }>();
   if (!ev || !p) throw new HttpError(404, "Not found");
   const sig = await passSig(await importPassKey(ev.signing_secret), ev.slug, p.id, p.role);
+  // Cached by the browser and Cloudflare for a minute: a thousand people opening links cost a handful of reads. A switched-off link stops working within that minute.
+  c.header("cache-control", "public, max-age=60, s-maxage=60");
   return c.json({
     event: { name: ev.name, date: ev.date, venue: ev.venue },
     person: { name: p.name, team: p.team, role: p.role, zones: JSON.parse(p.zones) as unknown },
@@ -60,5 +62,5 @@ share.get("/public/pass/:token/photo", async (c) => {
   const l = await linkFor(c, c.req.param("token"));
   const ph = await c.env.DB.prepare("SELECT content_type, bytes FROM photos WHERE event_id = ? AND person_id = ?").bind(l.event_id, l.person_id).first<{ content_type: string; bytes: ArrayBuffer }>();
   if (!ph) throw new HttpError(404, "Not found");
-  return imageResponse(ph.content_type, blobBytes(ph.bytes), "private, no-store");
+  return imageResponse(ph.content_type, blobBytes(ph.bytes), "private, max-age=300");
 });

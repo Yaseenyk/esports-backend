@@ -167,6 +167,7 @@ async function usableInvite(c: { env: AppBindings["Bindings"] }, token: string):
 
 invites.get("/public/invite/:token", async (c) => {
   const i = await usableInvite(c, c.req.param("token"));
+  c.header("cache-control", "public, max-age=30");
   return c.json({ event: { name: i.event_name, date: i.event_date }, team: { name: i.team_name } });
 });
 

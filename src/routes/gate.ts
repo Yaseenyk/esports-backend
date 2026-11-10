@@ -85,12 +85,66 @@ gate.post("/gate/checkin", async (c) => {
   return c.json(await checkCode(c, typeof body.code === "string" ? body.code : ""));
 });
 
-/** Replays scans that were queued while the gate was offline, one request for up to 100 of them. */
+/** Replays scans that were queued while the gate was offline. Up to 100 codes cost a handful of queries, not several per scan. */
 gate.post("/gate/checkin/batch", async (c) => {
   const body = await readJson(c);
   const codes = Array.isArray(body.codes) ? body.codes.filter((x): x is string => typeof x === "string") : [];
   if (codes.length === 0 || codes.length > 100) throw new HttpError(400, "Send between 1 and 100 codes");
-  const results = [];
-  for (const code of codes) results.push({ code, ...(await checkCode(c, code)) });
+  const eid = c.get("gateEventId");
+  const db = c.env.DB;
+  const ev = await db.prepare("SELECT * FROM events WHERE id = ?").bind(eid).first<EventRow>();
+  if (!ev) throw new HttpError(401, "Valid gate key required");
+
+  type P = { code: string; id?: string; sig?: string; early?: ReturnType<typeof bad> };
+  const parsed: P[] = codes.map((code) => {
+    if (code.length > 200) return { code, early: bad("Malformed pass") };
+    const parts = code.split(".");
+    if (parts.length < 4 || parts[0] !== "EH1") return { code, early: bad("Malformed pass") };
+    if (!timingSafeEqual(parts[1]!, ev.slug)) return { code, early: bad("Pass is for a different event") };
+    return { code, id: parts.slice(2, -1).join("."), sig: parts[parts.length - 1]! };
+  });
+  const ids = [...new Set(parsed.filter((x) => x.id).map((x) => x.id!))];
+  type Row = { id: string; name: string; team: string | null; role: string; zones: string; minor: number; guardian: number };
+  const people = new Map<string, Row>();
+  if (ids.length) {
+    const rows = await db
+      .prepare("SELECT p.id, p.name, t.name AS team, p.role, p.zones, p.minor, p.guardian FROM people p LEFT JOIN teams t ON t.event_id = p.event_id AND t.id = p.team_id WHERE p.event_id = ? AND p.id IN (SELECT value FROM json_each(?))")
+      .bind(eid, JSON.stringify(ids))
+      .all<Row>();
+    for (const r of rows.results) people.set(r.id, r);
+  }
+  const key = await importPassKey(ev.signing_secret);
+  const valid: { p: P; person: Row }[] = [];
+  const out = new Map<string, ReturnType<typeof bad> | { status: "ok" | "again"; person: unknown; at: string }>();
+  for (const x of parsed) {
+    if (x.early) { out.set(x.code, x.early); continue; }
+    const person = people.get(x.id!);
+    if (!person) { out.set(x.code, bad("Unknown person")); continue; }
+    if (!timingSafeEqual(await passSig(key, ev.slug, person.id, person.role), x.sig!)) { out.set(x.code, bad("Signature does not match (pass edited or role changed)")); continue; }
+    valid.push({ p: x, person });
+  }
+  const at = nowIso();
+  const unique = [...new Map(valid.map((v) => [v.person.id, v.person])).values()];
+  const fresh = new Set<string>();
+  if (unique.length) {
+    const res = await db.batch(unique.map((u) => db.prepare("INSERT INTO checkins (event_id, person_id, at) VALUES (?, ?, ?) ON CONFLICT (event_id, person_id) DO NOTHING").bind(eid, u.id, at)));
+    res.forEach((r, i) => { if (r.meta.changes === 1) fresh.add(unique[i]!.id); });
+  }
+  const earlier = new Map<string, string>();
+  const old = unique.filter((u) => !fresh.has(u.id)).map((u) => u.id);
+  if (old.length) {
+    const rows = await db.prepare("SELECT person_id, at FROM checkins WHERE event_id = ? AND person_id IN (SELECT value FROM json_each(?))").bind(eid, JSON.stringify(old)).all<{ person_id: string; at: string }>();
+    for (const r of rows.results) earlier.set(r.person_id, r.at);
+  }
+  const info = (r: Row) => ({ id: r.id, name: r.name, team: r.team, role: r.role, zones: JSON.parse(r.zones) as unknown, minor: !!r.minor, guardian: !!r.guardian });
+  const seen = new Set<string>();
+  const results = parsed.map((x) => {
+    const early = out.get(x.code);
+    if (early) return { code: x.code, ...early };
+    const person = people.get(x.id!)!;
+    const first = fresh.has(person.id) && !seen.has(person.id);
+    seen.add(person.id);
+    return { code: x.code, status: first ? ("ok" as const) : ("again" as const), person: info(person), at: first ? at : (earlier.get(person.id) ?? at) };
+  });
   return c.json({ results });
 });
