@@ -1,0 +1,15 @@
+name = "esports-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://esports.streamerosai.com,http://localhost:3000,http://localhost:4173"
+# PBKDF2_ITERATIONS = "100000"   # optional; Workers caps PBKDF2 at 100000
+
+# Secrets (set with `wrangler secret put`, never in this file): JWT_SECRET
+
+[[d1_databases]]
+binding = "DB"
+database_name = "esports-db"
+database_id = "00000000-0000-0000-0000-000000000000" # replace with the id printed by `wrangler d1 create esports-db`
+migrations_dir = "migrations"
