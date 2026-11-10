@@ -7,6 +7,7 @@ import { roster } from "./routes/roster";
 import { gate } from "./routes/gate";
 import { share } from "./routes/share";
 import { invites } from "./routes/invites";
+import { contact } from "./routes/contact";
 
 const app = new Hono<AppBindings>();
 
@@ -45,6 +46,7 @@ app.route("/", roster);
 app.route("/", gate);
 app.route("/", share);
 app.route("/", invites);
+app.route("/", contact);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((err, c) => {

@@ -165,3 +165,21 @@ describe("invites and self-submission", () => {
     expect((await submit(inv.token, { name: "other ip" })).status).toBe(201);
   });
 });
+
+describe("public contact form", () => {
+  it("stores a message, refuses short or bad ones, ignores bots and is rate limited", async () => {
+    const ip = "198.51.100.23";
+    const ok = await call("/public/contact", { ip, body: { name: "Asha", email: "asha@example.com", message: "Your guide has a typo in step 3." } });
+    expect(ok.status).toBe(201);
+    const row = await env.DB.prepare("SELECT name, email, message FROM contact_messages WHERE email = ?").bind("asha@example.com").first();
+    expect(row).toMatchObject({ name: "Asha", message: "Your guide has a typo in step 3." });
+    expect((await call("/public/contact", { ip, body: { message: "short" } })).status).toBe(400);
+    expect((await call("/public/contact", { ip, body: { message: "A long enough message here", email: "not-an-email" } })).status).toBe(400);
+    const bot = await call("/public/contact", { ip, body: { message: "Buy cheap watches now please", website: "http://spam.example" } });
+    expect(bot.status).toBe(201);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM contact_messages WHERE message LIKE 'Buy cheap%'").first()).toEqual({ n: 0 });
+    let last = 0;
+    for (let i = 0; i < 6; i++) last = (await call("/public/contact", { ip: "198.51.100.99", body: { message: `Message number ${i} long enough` } })).status;
+    expect(last).toBe(429);
+  });
+});

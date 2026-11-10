@@ -76,8 +76,9 @@ describe("auth", () => {
     const forgedPayload = b64u(JSON.stringify({ sub: b.id, exp: Math.floor(Date.now() / 1000) + 9999 }));
     const r = await call("/me", { token: `${h}.${forgedPayload}.${s}` });
     expect(r.status).toBe(401);
-    // last signature char flipped
-    const flipped = a.token.slice(0, -1) + (a.token.endsWith("A") ? "B" : "A");
+    // one signature character flipped near the start. (The very last character of a base64url signature carries unused padding bits, so flipping it can leave the bytes unchanged.)
+    const sigStart = a.token.lastIndexOf(".") + 1;
+    const flipped = a.token.slice(0, sigStart) + (a.token[sigStart] === "A" ? "B" : "A") + a.token.slice(sigStart + 1);
     expect((await call("/me", { token: flipped })).status).toBe(401);
   });
 
