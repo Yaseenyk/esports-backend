@@ -1,5 +1,7 @@
 import { exports } from "cloudflare:workers";
 
+const worker = (exports as unknown as { default: { fetch(r: Request): Promise<Response> } }).default;
+
 let counter = 0;
 export const uniq = () => `${Date.now().toString(36)}${(counter++).toString(36)}`;
 /** Unique fake client IP, so tests never share a rate-limit bucket. */
@@ -27,15 +29,16 @@ export async function call(path: string, o: Opts = {}) {
     body = JSON.stringify(o.body);
     headers["content-type"] = "application/json";
   }
-  const res = await exports.default.fetch(new Request(`https://api.test${path}`, { method: o.method ?? (body !== undefined ? "POST" : "GET"), headers, body }));
-  const text = await res.clone().text();
+  const res = await worker.fetch(new Request(`https://api.test${path}`, { method: o.method ?? (body !== undefined ? "POST" : "GET"), headers, body }));
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const text = new TextDecoder().decode(bytes);
   let json: any = null;
   try {
     json = JSON.parse(text);
   } catch {
     /* not json */
   }
-  return { status: res.status, json, text, headers: res.headers, res };
+  return { status: res.status, json, text, bytes, headers: res.headers };
 }
 
 export async function newUser(name = "Tester") {

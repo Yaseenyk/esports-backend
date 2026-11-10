@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings, EventRow } from "../types";
 import { importPassKey, passCode, passSig, randomToken } from "../crypto";
 import { HttpError, nowIso } from "../http";
-import { imageResponse } from "../images";
+import { blobBytes, imageResponse } from "../images";
 import { ownedEvent, requireUser } from "../auth";
 
 export const share = new Hono<AppBindings>();
@@ -60,5 +60,5 @@ share.get("/public/pass/:token/photo", async (c) => {
   const l = await linkFor(c, c.req.param("token"));
   const ph = await c.env.DB.prepare("SELECT content_type, bytes FROM photos WHERE event_id = ? AND person_id = ?").bind(l.event_id, l.person_id).first<{ content_type: string; bytes: ArrayBuffer }>();
   if (!ph) throw new HttpError(404, "Not found");
-  return imageResponse(ph.content_type, ph.bytes, "private, no-store");
+  return imageResponse(ph.content_type, blobBytes(ph.bytes), "private, no-store");
 });

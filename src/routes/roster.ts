@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import { importPassKey, passCode, passSig, randomToken, sha256 } from "../crypto";
 import { HttpError, MAX_PHOTO_BODY, idStr, inHours, nowIso, optBool, optHours, readBytes, readJson, str } from "../http";
-import { checkImage, imageResponse, parsePhotoDataUrl, validateLogo, type Image } from "../images";
+import { blobBytes, checkImage, imageResponse, parsePhotoDataUrl, validateLogo, type Image } from "../images";
 import { ownedEvent } from "../auth";
 
 export const roster = new Hono<AppBindings>();
@@ -154,7 +154,7 @@ roster.get("/events/:id/photos/:personId", async (c) => {
   const ev = await ownedEvent(c, c.req.param("id"));
   const ph = await c.env.DB.prepare("SELECT content_type, bytes FROM photos WHERE event_id = ? AND person_id = ?").bind(ev.id, c.req.param("personId")).first<{ content_type: string; bytes: ArrayBuffer }>();
   if (!ph) throw new HttpError(404, "Photo not found");
-  return imageResponse(ph.content_type, ph.bytes);
+  return imageResponse(ph.content_type, blobBytes(ph.bytes));
 });
 
 roster.put("/events/:id/photos/:personId", async (c) => {

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import { randomToken } from "../crypto";
 import { HttpError, idStr, inHours, nowIso, optBool, optHours, optStr, rateLimit, readJson, str } from "../http";
-import { imageResponse, parsePhotoDataUrl } from "../images";
+import { blobBytes, imageResponse, parsePhotoDataUrl } from "../images";
 import { ownedEvent, requireUser } from "../auth";
 
 export const invites = new Hono<AppBindings>();
@@ -86,7 +86,7 @@ invites.get("/events/:id/submissions/:sid/photo", requireUser, async (c) => {
   const ev = await ownedEvent(c, c.req.param("id"));
   const r = await c.env.DB.prepare("SELECT photo, photo_type FROM submissions WHERE id = ? AND event_id = ? AND photo IS NOT NULL").bind(c.req.param("sid"), ev.id).first<{ photo: ArrayBuffer; photo_type: string }>();
   if (!r) throw new HttpError(404, "Photo not found");
-  return imageResponse(r.photo_type, r.photo);
+  return imageResponse(r.photo_type, blobBytes(r.photo));
 });
 
 async function pendingSubmission(c: Parameters<typeof ownedEvent>[0], eventId: string, sid: string) {

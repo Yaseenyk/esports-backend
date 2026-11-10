@@ -48,3 +48,11 @@ export function imageResponse(type: string, bytes: ArrayBuffer | Uint8Array, cac
     headers: { "content-type": type, "x-content-type-options": "nosniff", "cache-control": cache, "content-disposition": "inline" },
   });
 }
+
+/** D1 returns BLOB columns as number[] (workerd) or ArrayBuffer (other runtimes). */
+export function blobBytes(v: unknown): Uint8Array {
+  if (v instanceof ArrayBuffer) return new Uint8Array(v);
+  if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  if (Array.isArray(v)) return Uint8Array.from(v as number[]);
+  return new Uint8Array(0);
+}

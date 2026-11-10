@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings, EventRow } from "../types";
 import { importPassKey, passSig, timingSafeEqual } from "../crypto";
 import { HttpError, nowIso, readJson } from "../http";
-import { imageResponse } from "../images";
+import { blobBytes, imageResponse } from "../images";
 import { requireGate } from "../auth";
 
 export const gate = new Hono<AppBindings>();
@@ -43,7 +43,7 @@ gate.get("/gate/photos/:personId", async (c) => {
     .bind(c.get("gateEventId"), c.req.param("personId"))
     .first<{ content_type: string; bytes: ArrayBuffer }>();
   if (!ph) throw new HttpError(404, "Photo not found");
-  return imageResponse(ph.content_type, ph.bytes);
+  return imageResponse(ph.content_type, blobBytes(ph.bytes));
 });
 
 const bad = (reason: string) => ({ status: "bad" as const, reason });
