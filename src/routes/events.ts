@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings, EventRow } from "../types";
 import { randomToken } from "../crypto";
 import { HttpError, nowIso, optStr, readJson, str, type Ctx } from "../http";
-import { ownedEvent, requireUser } from "../auth";
+import { ownedEvent, ownerEvent, requireUser } from "../auth";
 
 export const events = new Hono<AppBindings>();
 events.use("/events", requireUser);
@@ -66,8 +66,9 @@ function settingsJson(v: unknown): string {
 }
 
 events.get("/events", async (c) => {
-  const rows = await c.env.DB.prepare("SELECT * FROM events WHERE owner_id = ? ORDER BY created_at DESC LIMIT 200").bind(c.get("userId")).all<EventRow>();
-  return c.json(rows.results.map(publicEvent));
+  const uid = c.get("userId");
+  const rows = await c.env.DB.prepare("SELECT e.*, CASE WHEN e.owner_id = ?1 THEN 'owner' ELSE m.role END AS my_role FROM events e LEFT JOIN event_members m ON m.event_id = e.id AND m.user_id = ?1 WHERE e.owner_id = ?1 OR m.user_id = ?1 ORDER BY e.created_at DESC LIMIT 200").bind(uid).all<EventRow & { my_role: string }>();
+  return c.json(rows.results.map((r) => ({ ...publicEvent(r), role: r.my_role })));
 });
 
 events.post("/events", async (c) => {
@@ -120,7 +121,7 @@ events.put("/events/:id", async (c) => {
 });
 
 events.delete("/events/:id", async (c) => {
-  const e = await ownedEvent(c, c.req.param("id"));
+  const e = await ownerEvent(c, c.req.param("id"));
   const db = c.env.DB;
   // Explicit cascade (the schema also declares ON DELETE CASCADE), atomically in one batch.
   await db.batch([

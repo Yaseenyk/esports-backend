@@ -14,10 +14,29 @@ export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
   await next();
 };
 
-/** Loads an event only if the signed-in user owns it; otherwise 404 (never reveals existence). */
-export async function ownedEvent(c: Ctx, id: string): Promise<EventRow> {
-  const row = await c.env.DB.prepare("SELECT * FROM events WHERE id = ? AND owner_id = ?").bind(id, c.get("userId")).first<EventRow>();
+export type EventRole = "owner" | "editor" | "viewer";
+
+/**
+ * Loads an event for the signed-in user if they own it or have been given access to it; otherwise 404 (never reveals existence).
+ * A viewer may only read: any other method is refused with 403.
+ */
+export async function accessibleEvent(c: Ctx, id: string): Promise<EventRow & { my_role: EventRole }> {
+  const uid = c.get("userId");
+  const row = await c.env.DB.prepare(
+    "SELECT e.*, CASE WHEN e.owner_id = ?1 THEN 'owner' ELSE m.role END AS my_role FROM events e LEFT JOIN event_members m ON m.event_id = e.id AND m.user_id = ?1 WHERE e.id = ?2 AND (e.owner_id = ?1 OR m.user_id = ?1)",
+  ).bind(uid, id).first<EventRow & { my_role: EventRole }>();
   if (!row) throw new HttpError(404, "Event not found");
+  if (row.my_role === "viewer" && c.req.method !== "GET") throw new HttpError(403, "You can view this event but not change it");
+  return row;
+}
+
+/** Same as accessibleEvent: owner or editor can read and change, a viewer can read. Kept under the old name so every route uses it. */
+export const ownedEvent = accessibleEvent;
+
+/** Only the owner: deleting the event and managing who else has access. */
+export async function ownerEvent(c: Ctx, id: string): Promise<EventRow> {
+  const row = await accessibleEvent(c, id);
+  if (row.my_role !== "owner") throw new HttpError(403, "Only the owner of the event can do this");
   return row;
 }
 

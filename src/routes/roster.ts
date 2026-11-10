@@ -178,6 +178,8 @@ roster.delete("/events/:id/photos/:personId", async (c) => {
 // ---- passes ----
 roster.get("/events/:id/passes", async (c) => {
   const ev = await ownedEvent(c, c.req.param("id"));
+  // The signed pass codes are the credentials the gate accepts, so a view-only organiser does not get them.
+  if ((ev as { my_role?: string }).my_role === "viewer") throw new HttpError(403, "View-only access does not include pass codes");
   const rows = await c.env.DB.prepare("SELECT id, role FROM people WHERE event_id = ? ORDER BY rowid").bind(ev.id).all<{ id: string; role: string }>();
   const key = await importPassKey(ev.signing_secret);
   const out = [];
