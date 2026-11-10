@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { basicRoster, call, newEvent, newGateKey, pngBytes, refSig, setupEvent } from "./helpers";
+import { basicRoster, call, newEvent, newGateKey, newUser, pngBytes, refSig, setupEvent } from "./helpers";
 
 async function codes(token: string, eventId: string) {
   const r = await call(`/events/${eventId}/passes`, { token });
@@ -56,7 +56,7 @@ describe("gate", () => {
     const live = await call(`/events/${s.ev.id}/checkins`, { token: s.token });
     expect(live.json.total).toBe(3);
     expect(live.json.checkedIn).toBe(1);
-    expect(live.json.checkins).toEqual([{ personId: "ALP-001", name: "Asha", team: "Alpha Wolves", role: "Player", at: first.json.at }]);
+    expect(live.json.checkins).toEqual([{ personId: "ALP-001", name: "Asha", team: "Alpha Wolves", role: "Player", at: first.json.at, door: expect.any(String) }]);
     const later = await call(`/events/${s.ev.id}/checkins?since=${encodeURIComponent(first.json.at)}`, { token: s.token });
     expect(later.json.checkins).toEqual([]);
     expect(later.json.checkedIn).toBe(1);
@@ -157,5 +157,42 @@ describe("gate batch check-in", () => {
     expect((await call("/gate/checkin/batch", { gate: gk.key, body: { codes: [] } })).status).toBe(400);
     expect((await call("/gate/checkin/batch", { gate: gk.key, body: { codes: Array(101).fill("x") } })).status).toBe(400);
     expect((await call("/gate/checkin/batch", { body: { codes: [c["ALP-001"]] } })).status).toBe(401);
+  });
+});
+
+describe("door audit and key-guessing limit", () => {
+  it("records which door scanned each guest", async () => {
+    const s = await setupEvent();
+    const gk = await call(`/events/${s.ev.id}/gate-keys`, { token: s.token, body: { label: "North door" } });
+    const c = await codes(s.token, s.ev.id);
+    await call("/gate/checkin", { gate: gk.json.key, body: { code: c["ALP-001"] } });
+    const live = await call(`/events/${s.ev.id}/checkins`, { token: s.token });
+    expect(live.json.checkins[0].door).toBe("North door");
+  });
+  it("throttles wrong gate keys from one address", async () => {
+    const ip = "203.0.113.77";
+    let last = 0;
+    for (let i = 0; i < 25; i++) last = (await call("/gate/roster", { gate: `gk_wrong${i}`, ip })).status;
+    expect(last).toBe(429);
+  });
+});
+
+describe("account safety", () => {
+  it("changes the password only with the current one, and deletes an account with everything in it", async () => {
+    const u = await newUser();
+    const wrong = await call("/auth/change-password", { token: u.token, body: { current: "nope-nope-nope", next: "A-new-passw0rd!" } });
+    expect(wrong.status).toBe(401);
+    const short = await call("/auth/change-password", { token: u.token, body: { current: "correct horse", next: "short" } });
+    expect(short.status).toBe(400);
+    const ok = await call("/auth/change-password", { token: u.token, body: { current: "correct horse", next: "A-new-passw0rd!" } });
+    expect(ok.status).toBe(200);
+    expect((await call("/auth/login", { body: { email: u.email, password: "correct horse" } })).status).toBe(401);
+    expect((await call("/auth/login", { body: { email: u.email, password: "A-new-passw0rd!" } })).status).toBe(200);
+
+    const ev = await newEvent(u.token, "Doomed");
+    expect((await call("/auth/delete-account", { token: u.token, body: { password: "wrong-one-here" } })).status).toBe(401);
+    expect((await call("/auth/delete-account", { token: u.token, body: { password: "A-new-passw0rd!" } })).status).toBe(200);
+    const left = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM users WHERE id = ?1) u, (SELECT COUNT(*) FROM events WHERE id = ?2) e").bind(u.id, ev.id).first<{ u: number; e: number }>();
+    expect(left).toEqual({ u: 0, e: 0 });
   });
 });

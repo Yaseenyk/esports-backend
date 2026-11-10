@@ -71,3 +71,27 @@ auth.get("/me", requireUser, async (c) => {
   if (!u) throw new HttpError(401, "Authentication required");
   return c.json(publicUser(u));
 });
+
+/** Change the password while signed in. Needs the current one, so a stolen token alone cannot lock the owner out. */
+auth.post("/auth/change-password", requireUser, async (c) => {
+  await rateLimit(c, "pwchange", 10, 15 * 60);
+  const body = await readJson(c);
+  const current = typeof body.current === "string" ? body.current : "";
+  const next = password(body.next);
+  const u = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(c.get("userId")).first<UserRow>();
+  if (!u || !(await verifyPassword(current, u.pw_hash, u.pw_salt, u.pw_iter))) throw new HttpError(401, "Current password is wrong");
+  const h = await hashPassword(next, iterationsFrom(c.env));
+  await c.env.DB.prepare("UPDATE users SET pw_hash = ?, pw_salt = ?, pw_iter = ? WHERE id = ?").bind(h.hash, h.salt, h.iterations, u.id).run();
+  return c.json({ ok: true });
+});
+
+/** Delete the account and everything under it (events, rosters, photos, check-ins, links). Needs the password. */
+auth.post("/auth/delete-account", requireUser, async (c) => {
+  await rateLimit(c, "pwchange", 10, 15 * 60);
+  const body = await readJson(c);
+  const u = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(c.get("userId")).first<UserRow>();
+  const pw = typeof body.password === "string" ? body.password : "";
+  if (!u || !(await verifyPassword(pw, u.pw_hash, u.pw_salt, u.pw_iter))) throw new HttpError(401, "Password is wrong");
+  await c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id).run();
+  return c.json({ ok: true });
+});

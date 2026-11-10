@@ -7,7 +7,7 @@ export interface Env {
 
 export type AppBindings = {
   Bindings: Env;
-  Variables: { userId: string; gateEventId: string; gateKeyId: string };
+  Variables: { userId: string; gateEventId: string; gateKeyId: string; gateLabel: string };
 };
 
 export interface EventRow {

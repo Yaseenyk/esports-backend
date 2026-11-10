@@ -74,7 +74,7 @@ async function checkCode(c: Ctx, code: string) {
 
   const info = { id: person.id, name: person.name, team: person.team, role: person.role, zones: JSON.parse(person.zones) as unknown, minor: !!person.minor, guardian: !!person.guardian };
   const at = nowIso();
-  const ins = await db.prepare("INSERT INTO checkins (event_id, person_id, at) VALUES (?, ?, ?) ON CONFLICT (event_id, person_id) DO NOTHING").bind(eid, person.id, at).run();
+  const ins = await db.prepare("INSERT INTO checkins (event_id, person_id, at, door) VALUES (?, ?, ?, ?) ON CONFLICT (event_id, person_id) DO NOTHING").bind(eid, person.id, at, c.get("gateLabel")).run();
   if (ins.meta.changes === 1) return { status: "ok" as const, person: info, at };
   const first = await db.prepare("SELECT at FROM checkins WHERE event_id = ? AND person_id = ?").bind(eid, person.id).first<{ at: string }>();
   return { status: "again" as const, person: info, at: first?.at ?? at };
@@ -127,7 +127,7 @@ gate.post("/gate/checkin/batch", async (c) => {
   const unique = [...new Map(valid.map((v) => [v.person.id, v.person])).values()];
   const fresh = new Set<string>();
   if (unique.length) {
-    const res = await db.batch(unique.map((u) => db.prepare("INSERT INTO checkins (event_id, person_id, at) VALUES (?, ?, ?) ON CONFLICT (event_id, person_id) DO NOTHING").bind(eid, u.id, at)));
+    const res = await db.batch(unique.map((u) => db.prepare("INSERT INTO checkins (event_id, person_id, at, door) VALUES (?, ?, ?, ?) ON CONFLICT (event_id, person_id) DO NOTHING").bind(eid, u.id, at, c.get("gateLabel"))));
     res.forEach((r, i) => { if (r.meta.changes === 1) fresh.add(unique[i]!.id); });
   }
   const earlier = new Map<string, string>();

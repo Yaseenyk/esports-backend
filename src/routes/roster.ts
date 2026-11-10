@@ -225,13 +225,13 @@ roster.get("/events/:id/checkins", async (c) => {
   const db = c.env.DB;
   const [list, totals] = await db.batch([
     db
-      .prepare("SELECT k.person_id, p.name, t.name AS team, p.role, k.at FROM checkins k JOIN people p ON p.event_id = k.event_id AND p.id = k.person_id LEFT JOIN teams t ON t.event_id = p.event_id AND t.id = p.team_id WHERE k.event_id = ? AND k.at > ? ORDER BY k.at LIMIT 2000")
+      .prepare("SELECT k.person_id, p.name, t.name AS team, p.role, k.at, k.door FROM checkins k JOIN people p ON p.event_id = k.event_id AND p.id = k.person_id LEFT JOIN teams t ON t.event_id = p.event_id AND t.id = p.team_id WHERE k.event_id = ? AND k.at > ? ORDER BY k.at LIMIT 2000")
       .bind(ev.id, since),
     db.prepare("SELECT (SELECT COUNT(*) FROM people WHERE event_id = ?1) AS total, (SELECT COUNT(*) FROM checkins WHERE event_id = ?1) AS checked").bind(ev.id),
   ]);
   const tot = totals!.results[0] as { total: number; checked: number };
   return c.json({
-    checkins: (list!.results as { person_id: string; name: string; team: string | null; role: string; at: string }[]).map((r) => ({ personId: r.person_id, name: r.name, team: r.team, role: r.role, at: r.at })),
+    checkins: (list!.results as { person_id: string; name: string; team: string | null; role: string; at: string; door: string | null }[]).map((r) => ({ personId: r.person_id, name: r.name, team: r.team, role: r.role, at: r.at, door: r.door })),
     total: tot.total,
     checkedIn: tot.checked,
   });

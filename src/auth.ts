@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import type { AppBindings, EventRow } from "./types";
 import { sha256, verifyJwt } from "./crypto";
-import { HttpError, type Ctx } from "./http";
+import { HttpError, rateLimit, type Ctx } from "./http";
 
 export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
   if (c.get("userId")) return next(); // already verified by an earlier middleware
@@ -24,12 +24,14 @@ export async function ownedEvent(c: Ctx, id: string): Promise<EventRow> {
 /** X-Gate-Key auth: sets the event id the key is scoped to. Revoked/expired/unknown => 401. */
 export const requireGate: MiddlewareHandler<AppBindings> = async (c, next) => {
   const key = c.req.header("x-gate-key");
-  if (!key || key.length > 128) throw new HttpError(401, "Valid gate key required");
-  const row = await c.env.DB.prepare("SELECT id, event_id FROM gate_keys WHERE key_hash = ? AND revoked = 0 AND (expires_at IS NULL OR expires_at > ?)")
+  if (!key || key.length > 128) { await rateLimit(c, "gatefail", 20, 600); throw new HttpError(401, "Valid gate key required"); }
+  const row = await c.env.DB.prepare("SELECT id, event_id, label FROM gate_keys WHERE key_hash = ? AND revoked = 0 AND (expires_at IS NULL OR expires_at > ?)")
     .bind(await sha256(key), new Date().toISOString())
-    .first<{ id: string; event_id: string }>();
-  if (!row) throw new HttpError(401, "Valid gate key required");
+    .first<{ id: string; event_id: string; label: string }>();
+  // Guessing keys is throttled: after 20 wrong tries from one address in 10 minutes, that address is refused for the rest of the window.
+  if (!row) { await rateLimit(c, "gatefail", 20, 600); throw new HttpError(401, "Valid gate key required"); }
   c.set("gateEventId", row.event_id);
   c.set("gateKeyId", row.id);
+  c.set("gateLabel", row.label);
   await next();
 };
