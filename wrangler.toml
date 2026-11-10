@@ -11,5 +11,5 @@ ALLOWED_ORIGINS = "https://esports.streamerosai.com,http://localhost:3000,http:/
 [[d1_databases]]
 binding = "DB"
 database_name = "esports-db"
-database_id = "00000000-0000-0000-0000-000000000000" # replace with the id printed by `wrangler d1 create esports-db`
+database_id = "440646ae-544f-492d-86bc-9a071d883607"
 migrations_dir = "migrations"
