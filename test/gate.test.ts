@@ -141,3 +141,21 @@ describe("gate", () => {
     expect((await call(`/events/${s.ev.id}/gate-keys/nope`, { method: "DELETE", token: s.token })).status).toBe(404);
   });
 });
+
+describe("gate batch check-in", () => {
+  it("replays queued scans in one request: ok, again, bad, and limits", async () => {
+    const s = await setupEvent();
+    const gk = await newGateKey(s.token, s.ev.id);
+    const c = await codes(s.token, s.ev.id);
+    await call("/gate/checkin", { gate: gk.key, body: { code: c["ALP-001"] } }); // already in
+    const r = await call("/gate/checkin/batch", { gate: gk.key, body: { codes: [c["ALP-001"], c["ALP-002"], "EH1.nope", c["ALP-002"]] } });
+    expect(r.status).toBe(200);
+    expect(r.json.results.map((x: any) => x.status)).toEqual(["again", "ok", "bad", "again"]);
+    expect(r.json.results[1].person.id).toBe("ALP-002");
+    const live = await call(`/events/${s.ev.id}/checkins`, { token: s.token });
+    expect(live.json.checkedIn).toBe(2);
+    expect((await call("/gate/checkin/batch", { gate: gk.key, body: { codes: [] } })).status).toBe(400);
+    expect((await call("/gate/checkin/batch", { gate: gk.key, body: { codes: Array(101).fill("x") } })).status).toBe(400);
+    expect((await call("/gate/checkin/batch", { body: { codes: [c["ALP-001"]] } })).status).toBe(401);
+  });
+});

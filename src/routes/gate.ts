@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { AppBindings, EventRow } from "../types";
 import { importPassKey, passSig, timingSafeEqual } from "../crypto";
 import { HttpError, nowIso, readJson } from "../http";
@@ -48,14 +48,14 @@ gate.get("/gate/photos/:personId", async (c) => {
 
 const bad = (reason: string) => ({ status: "bad" as const, reason });
 
-gate.post("/gate/checkin", async (c) => {
-  const body = await readJson(c);
-  const code = typeof body.code === "string" ? body.code : "";
+type Ctx = Context<AppBindings>;
+
+async function checkCode(c: Ctx, code: string) {
   const eid = c.get("gateEventId");
-  if (code.length > 200) return c.json(bad("Malformed pass"));
+  if (code.length > 200) return bad("Malformed pass");
   // EH1.<eventKey>.<personId>.<sig>; the id may itself contain dots, so take first two and last parts.
   const parts = code.split(".");
-  if (parts.length < 4 || parts[0] !== "EH1") return c.json(bad("Malformed pass"));
+  if (parts.length < 4 || parts[0] !== "EH1") return bad("Malformed pass");
   const eventKey = parts[1]!;
   const sig = parts[parts.length - 1]!;
   const personId = parts.slice(2, -1).join(".");
@@ -63,19 +63,34 @@ gate.post("/gate/checkin", async (c) => {
   const db = c.env.DB;
   const ev = await db.prepare("SELECT * FROM events WHERE id = ?").bind(eid).first<EventRow>();
   if (!ev) throw new HttpError(401, "Valid gate key required");
-  if (!timingSafeEqual(eventKey, ev.slug)) return c.json(bad("Pass is for a different event"));
+  if (!timingSafeEqual(eventKey, ev.slug)) return bad("Pass is for a different event");
   const person = await db
     .prepare("SELECT p.id, p.name, t.name AS team, p.role, p.zones, p.minor, p.guardian FROM people p LEFT JOIN teams t ON t.event_id = p.event_id AND t.id = p.team_id WHERE p.event_id = ? AND p.id = ?")
     .bind(eid, personId)
     .first<{ id: string; name: string; team: string | null; role: string; zones: string; minor: number; guardian: number }>();
-  if (!person) return c.json(bad("Unknown person"));
+  if (!person) return bad("Unknown person");
   const expected = await passSig(await importPassKey(ev.signing_secret), ev.slug, person.id, person.role);
-  if (!timingSafeEqual(expected, sig)) return c.json(bad("Signature does not match (pass edited or role changed)"));
+  if (!timingSafeEqual(expected, sig)) return bad("Signature does not match (pass edited or role changed)");
 
   const info = { id: person.id, name: person.name, team: person.team, role: person.role, zones: JSON.parse(person.zones) as unknown, minor: !!person.minor, guardian: !!person.guardian };
   const at = nowIso();
   const ins = await db.prepare("INSERT INTO checkins (event_id, person_id, at) VALUES (?, ?, ?) ON CONFLICT (event_id, person_id) DO NOTHING").bind(eid, person.id, at).run();
-  if (ins.meta.changes === 1) return c.json({ status: "ok", person: info, at });
+  if (ins.meta.changes === 1) return { status: "ok" as const, person: info, at };
   const first = await db.prepare("SELECT at FROM checkins WHERE event_id = ? AND person_id = ?").bind(eid, person.id).first<{ at: string }>();
-  return c.json({ status: "again", person: info, at: first?.at ?? at });
+  return { status: "again" as const, person: info, at: first?.at ?? at };
+}
+
+gate.post("/gate/checkin", async (c) => {
+  const body = await readJson(c);
+  return c.json(await checkCode(c, typeof body.code === "string" ? body.code : ""));
+});
+
+/** Replays scans that were queued while the gate was offline, one request for up to 100 of them. */
+gate.post("/gate/checkin/batch", async (c) => {
+  const body = await readJson(c);
+  const codes = Array.isArray(body.codes) ? body.codes.filter((x): x is string => typeof x === "string") : [];
+  if (codes.length === 0 || codes.length > 100) throw new HttpError(400, "Send between 1 and 100 codes");
+  const results = [];
+  for (const code of codes) results.push({ code, ...(await checkCode(c, code)) });
+  return c.json({ results });
 });
