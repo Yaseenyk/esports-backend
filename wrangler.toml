@@ -4,9 +4,11 @@ compatibility_date = "2026-06-01"
 
 [vars]
 ALLOWED_ORIGINS = "https://esports.streamerosai.com,http://localhost:3000,http://localhost:4173"
+MAIL_FROM = "Esports Hub <noreply@mail.streamerosai.com>"
+APP_URL = "https://esports.streamerosai.com"
 # PBKDF2_ITERATIONS = "100000"   # optional; Workers caps PBKDF2 at 100000
 
-# Secrets (set with `wrangler secret put`, never in this file): JWT_SECRET
+# Secrets (set with `wrangler secret put`, never in this file): JWT_SECRET, RESEND_API_KEY
 
 [[d1_databases]]
 binding = "DB"

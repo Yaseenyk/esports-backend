@@ -110,3 +110,16 @@ export async function rateLimit(c: Ctx, scope: string, limit: number, windowSec:
   }
   if (row && row.count > limit) throw new HttpError(429, "Too many requests, try again later");
 }
+
+/** Limit keyed by an arbitrary subject (for example a normalised email), independent of the caller's IP. The subject is only stored hashed. */
+export async function rateLimitSubject(c: Ctx, scope: string, subject: string, limit: number, windowSec: number): Promise<void> {
+  const key = await sha256(`${c.env.JWT_SECRET}|${scope}|subject|${subject}`);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const ws = Math.floor(nowSec / windowSec) * windowSec;
+  const row = await c.env.DB.prepare(
+    "INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1) ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1 RETURNING count",
+  )
+    .bind(key, ws)
+    .first<{ count: number }>();
+  if (row && row.count > limit) throw new HttpError(429, "Too many requests, try again later");
+}

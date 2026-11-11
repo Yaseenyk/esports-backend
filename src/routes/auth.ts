@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
-import { hashPassword, iterationsFrom, pwFingerprint, signJwt, verifyPassword } from "../crypto";
-import { HttpError, nowIso, rateLimit, readJson, str } from "../http";
+import { hashPassword, iterationsFrom, pwFingerprint, randomToken, sha256, signJwt, verifyPassword } from "../crypto";
+import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, str } from "../http";
+import { getMailer, resetLink, resetMail } from "../mailer";
 import { requireUser } from "../auth";
 
 export const auth = new Hono<AppBindings>();
@@ -100,5 +101,60 @@ auth.post("/auth/delete-account", requireUser, async (c) => {
   const pw = typeof body.password === "string" ? body.password : "";
   if (!u || !(await verifyPassword(pw, u.pw_hash, u.pw_salt, u.pw_iter))) throw new HttpError(401, "Password is wrong");
   await c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id).run();
+  return c.json({ ok: true });
+});
+
+const RESET_TTL_MS = 30 * 60_000;
+
+/** Always 200 for a well-formed request, whether or not the account exists. */
+auth.post("/auth/forgot", async (c) => {
+  const body = await readJson(c);
+  const e = email(body.email);
+  await rateLimit(c, "forgot-ip", 20, 3600);
+  await rateLimitSubject(c, "forgot-email", e, 5, 3600);
+  const u = await c.env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(e).first<{ id: string }>();
+  // Same work whether or not the account exists: a token is always generated and hashed.
+  const token = randomToken(32);
+  const tokenHash = await sha256(token);
+  if (u) {
+    const now = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(now, u.id),
+      c.env.DB.prepare("INSERT INTO password_resets (id, user_id, token_hash, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?, NULL)")
+        .bind(crypto.randomUUID(), u.id, tokenHash, now, new Date(Date.now() + RESET_TTL_MS).toISOString()),
+    ]);
+    const mailer = getMailer(c.env);
+    if (!mailer) console.warn("password reset requested but RESEND_API_KEY is not set; no email sent");
+    else {
+      // Sent after the response, so how long this request takes never reveals whether the account exists.
+      const send = (async () => {
+        try {
+          await mailer.send(resetMail(e, resetLink(c.env, token)));
+        } catch {
+          console.warn("password reset email failed to send"); // no details: they could contain the address
+        }
+      })();
+      try { c.executionCtx.waitUntil(send); } catch { await send; } // no execution context (some test setups): wait instead
+    }
+  }
+  return c.json({ ok: true });
+});
+
+auth.post("/auth/reset", async (c) => {
+  await rateLimit(c, "reset", 10, 15 * 60);
+  const body = await readJson(c);
+  const pw = password(body.password);
+  const token = typeof body.token === "string" ? body.token : "";
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) throw new HttpError(400, "invalid_or_expired");
+  const h = await hashPassword(pw, iterationsFrom(c.env));
+  // Atomic single use: only one request can flip used_at from NULL.
+  const row = await c.env.DB.prepare("UPDATE password_resets SET used_at = ?1 WHERE token_hash = ?2 AND used_at IS NULL AND expires_at > ?1 RETURNING user_id")
+    .bind(nowIso(), await sha256(token))
+    .first<{ user_id: string }>();
+  if (!row) throw new HttpError(400, "invalid_or_expired");
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE users SET pw_hash = ?, pw_salt = ?, pw_iter = ? WHERE id = ?").bind(h.hash, h.salt, h.iterations, row.user_id),
+    c.env.DB.prepare("DELETE FROM password_resets WHERE user_id = ?").bind(row.user_id),
+  ]);
   return c.json({ ok: true });
 });

@@ -78,6 +78,8 @@ const PUBLIC = new Set([
   "GET /",
   "POST /auth/register",
   "POST /auth/login",
+  "POST /auth/forgot",
+  "POST /auth/reset",
   "GET /public/pass/:token",
   "GET /public/pass/:token/photo",
   "GET /public/invite/:token",
