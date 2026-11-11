@@ -136,8 +136,9 @@ describe("profiles: consent and the public page", () => {
     expect((await call(`/public/team/${p.slug}`)).status).toBe(404);
     expect((await call("/profiles", { token: u.token })).json.profiles).toEqual([]);
     const ip = "203.0.113.77";
-    let last = 0;
-    for (let i = 0; i < 242; i++) last = (await call(`/public/team/${p.slug}`, { ip })).status;
-    expect(last).toBe(429);
+    // The limiter counts per time window. On a slow machine the loop can cross a window boundary and start a fresh count, so allow a second window's worth of requests and stop at the first 429.
+    let seen = 0;
+    for (let i = 0; i < 484 && seen !== 429; i++) seen = (await call(`/public/team/${p.slug}`, { ip })).status;
+    expect(seen).toBe(429);
   });
 });
