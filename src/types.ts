@@ -7,6 +7,7 @@ export interface Env {
   MAIL_FROM?: string;
   APP_URL?: string;
   LINK_KEY?: string; // secret: wrangler secret put LINK_KEY (S7: encrypts the re-displayable copy of share, invite and registration tokens)
+  TRACK?: { writeDataPoint(p: { blobs?: string[]; doubles?: number[]; indexes?: string[] }): void }; // optional Analytics Engine binding for tool_complete; absent = dropped (OD-C amended)
   HASH_KEY?: string; // secret: keys unsubscribe tokens (S10); falls back to JWT_SECRET until set
 }
 

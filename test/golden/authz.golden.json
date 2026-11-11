@@ -497,6 +497,7 @@
   "public POST /public/report/:token/matches/:mid": "404 | This link is not valid any more. Ask the organiser for a new one. | ",
   "public POST /public/score/:token/br": "404 | This scoring link is not valid. Ask the organiser for a new one. | ",
   "public POST /public/score/:token/matches/:mid/result": "404 | This scoring link is not valid. Ask the organiser for a new one. | ",
+  "public POST /public/t": "204 | - | empty",
   "public POST /public/unsubscribe/:token": "404 | Not found | ",
   "stranger DELETE /brand": "200 | - | brand,source",
   "stranger DELETE /events/:ev": "404 | Event not found | ",

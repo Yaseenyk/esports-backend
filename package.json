@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:migrations": "vitest run --config vitest.migrations.config.ts",
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

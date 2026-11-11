@@ -15,6 +15,7 @@ import { scheduled } from "./features/reminders-cron";
 import { linksBackfillTick } from "./features/links-backfill";
 import { mountFeatures } from "./features";
 import { verify } from "./routes/verify";
+import { track } from "./routes/track";
 
 const app = new Hono<AppBindings>();
 
@@ -58,6 +59,7 @@ app.route("/", registration);
 app.route("/", members);
 app.route("/", live);
 app.route("/", verify);
+app.route("/", track);
 mountFeatures(app);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
