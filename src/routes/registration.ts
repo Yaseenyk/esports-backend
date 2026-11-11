@@ -142,6 +142,15 @@ registration.post("/public/registration/:token/submit", async (c) => {
   const captainName = str(b.captainName, "captainName", 2, 80);
   const contact = str(b.captainContact, "captainContact", 5, 120);
   const notes = optStr(b.notes, "notes", 500);
+  // Optional email updates: an address is stored only together with an explicit agreement, and the wording they agreed to is kept with the time.
+  const emailRaw = optStr(b.captainEmail, "captainEmail", 120).toLowerCase();
+  const consent = optBool(b.emailConsent, "emailConsent");
+  let email: string | null = null, consentText: string | null = null, consentAt: string | null = null;
+  if (emailRaw || consent) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) throw new HttpError(400, "captainEmail must be a valid email address");
+    if (!consent) throw new HttpError(400, "Tick the box to agree to emails, or leave the email empty");
+    email = emailRaw; consentText = optStr(b.emailConsentText, "emailConsentText", 300) || "Email me updates about this event"; consentAt = nowIso();
+  }
   if (!Array.isArray(b.players)) throw new HttpError(400, "players must be a list");
   if (b.players.length < row.team_size || b.players.length > row.team_size + row.subs) throw new HttpError(400, `Give ${row.team_size} players${row.subs ? ` and up to ${row.subs} substitute${row.subs === 1 ? "" : "s"}` : ""}`);
   const players: Player[] = b.players.map((p: Record<string, unknown>, i: number) => {
@@ -152,7 +161,7 @@ registration.post("/public/registration/:token/submit", async (c) => {
   const dup = await db.prepare("SELECT 1 FROM registrations WHERE event_id = ? AND lower(team_name) = lower(?) AND status != 'rejected'").bind(row.event_id, teamName).first();
   if (dup) throw new HttpError(409, "A team with this name has already registered");
   const id = crypto.randomUUID();
-  await db.prepare("INSERT INTO registrations (id, event_id, team_name, captain_name, captain_contact, players, notes, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)")
-    .bind(id, row.event_id, teamName, captainName, contact, JSON.stringify(players), notes, nowIso()).run();
+  await db.prepare("INSERT INTO registrations (id, event_id, team_name, captain_name, captain_contact, players, notes, status, created_at, captain_email, email_consent_text, email_consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)")
+    .bind(id, row.event_id, teamName, captainName, contact, JSON.stringify(players), notes, nowIso(), email, consentText, consentAt).run();
   return c.json({ ok: true, id }, 201);
 });

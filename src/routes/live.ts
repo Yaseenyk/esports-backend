@@ -3,6 +3,7 @@ import type { AppBindings } from "../types";
 import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, type Ctx } from "../http";
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
+import { listMatches, publicMatch } from "../matches";
 
 export const live = new Hono<AppBindings>();
 
@@ -142,10 +143,12 @@ live.get("/public/live/:slug", async (c) => {
   const slug = c.req.param("slug");
   if (!SLUG_RE.test(slug)) throw new HttpError(404, "not_found");
   const row = await c.env.DB.prepare(
-    "SELECT e.name AS name, e.date AS date, e.venue AS venue, l.snapshot AS snapshot, l.updated_at AS updated_at FROM live_pages l JOIN events e ON e.id = l.event_id WHERE l.slug = ? AND l.published = 1",
-  ).bind(slug).first<{ name: string; date: string; venue: string; snapshot: string; updated_at: string }>();
+    "SELECT e.id AS event_id, e.name AS name, e.date AS date, e.venue AS venue, l.snapshot AS snapshot, l.updated_at AS updated_at FROM live_pages l JOIN events e ON e.id = l.event_id WHERE l.slug = ? AND l.published = 1",
+  ).bind(slug).first<{ event_id: string; name: string; date: string; venue: string; snapshot: string; updated_at: string }>();
   if (!row) throw new HttpError(404, "not_found");
-  const body = JSON.stringify({ event: { name: row.name, date: row.date, venue: row.venue }, snapshot: parseSnapshot(row.snapshot), updatedAt: row.updated_at });
+  const matches = (await listMatches(c.env, row.event_id)).map(publicMatch);
+  // `matches` is only present when the event has some, so pages without matches keep exactly the old body (and ETag). The ETag hashes the body, so it changes when a match does.
+  const body = JSON.stringify({ event: { name: row.name, date: row.date, venue: row.venue }, snapshot: parseSnapshot(row.snapshot), updatedAt: row.updated_at, ...(matches.length ? { matches } : {}) });
   const etag = `"${(await sha256(body)).slice(0, 27)}"`;
   const headers = { "cache-control": "public, max-age=10", etag, "content-type": "application/json; charset=UTF-8" };
   const inm = c.req.header("if-none-match");

@@ -1,29 +1,17 @@
+/// <reference types="vite/client" />
 import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import app from "../src/index";
+import type { Ctx, FeatureRoutes, FeatureRow } from "./features/types";
 import { call, freshIp, newEvent, newGateKey, newUser, pngDataUrl, setupEvent, uniq } from "./helpers";
 
-// One row per route in src/routes. `owner` = owner-only. `viewerOk` = a view-only member may call it (GET) and gets 200.
-interface R {
-  method: string;
-  path: (c: Ctx) => string;
-  body?: unknown;
-  owner?: boolean;
-  viewerBlocked?: boolean; // GET that a viewer still may not do (403)
-}
-interface Ctx {
-  ev: string;
-  pid: string; // a real person id
-  kid: string; // a real gate key id
-  iid: string; // a real invite id
-  sid: string; // a real submission id
-  rid: string; // a real registration id
-  uid: string; // another member's user id
-}
+// One row per route in src/routes. `owner` = owner-only. `viewerBlocked` = a GET a view-only member still may not do (403); other GETs give a viewer 200.
+// Feature modules add their rows in test/features/<id>.routes.ts (see test/features/README.md).
+type R = FeatureRow;
 vi.setConfig({ testTimeout: 120_000 });
 const D = "nope"; // dummy child id: never exists, so a state-changing call by an allowed role can only 404 on the child
 
-const ROUTES: R[] = [
+const CORE_ROUTES: R[] = [
   { method: "GET", path: () => "/events" },
   { method: "POST", path: () => "/events", body: { name: "x" } },
   { method: "GET", path: (c) => `/events/${c.ev}` },
@@ -61,11 +49,25 @@ const ROUTES: R[] = [
   { method: "PUT", path: (c) => `/events/${c.ev}/live`, body: {} },
 ];
 
+const featureFiles = import.meta.glob("./features/*.routes.ts", { eager: true }) as Record<string, { default: FeatureRoutes }>;
+const FEATURES = Object.entries(featureFiles).sort(([x], [y]) => x.localeCompare(y)).map(([file, m]) => ({ file, ...m.default }));
+const ROUTES: R[] = [...CORE_ROUTES, ...FEATURES.flatMap((f) => f.rows)];
+
 // Account-level routes: need a user token, have no event.
 const ACCOUNT: { method: string; path: string; body?: unknown }[] = [
   { method: "GET", path: "/me" },
   { method: "POST", path: "/auth/change-password", body: { current: "x", next: "yyyyyyyy" } },
   { method: "POST", path: "/auth/delete-account", body: { password: "x" } },
+  // brand kit and team profiles belong to the signed-in user, not to an event
+  { method: "GET", path: "/brand" },
+  { method: "PUT", path: "/brand", body: { name: "x", primaryColor: "#0a84ff", secondaryColor: "#7c3aed" } },
+  { method: "DELETE", path: "/brand" },
+  { method: "GET", path: "/profiles" },
+  { method: "POST", path: "/profiles", body: { name: "x" } },
+  { method: "PUT", path: "/profiles/:id", body: { name: "x" } },
+  { method: "DELETE", path: "/profiles/:id" },
+  { method: "POST", path: "/profiles/:id/link", body: { eventId: "x", teamName: "x" } },
+  { method: "POST", path: "/profiles/:id/unlink", body: { eventId: "x", teamName: "x" } },
 ];
 
 const GATE: { method: string; path: string; body?: unknown }[] = [
@@ -90,6 +92,7 @@ const PUBLIC = new Set([
   "POST /public/registration/:token/submit",
   "POST /public/contact",
   "GET /public/live/:slug",
+  ...FEATURES.flatMap((f) => f.publicRoutes.map((r) => `${r.method} ${r.path}`)),
 ]);
 
 async function world() {
@@ -108,14 +111,16 @@ async function world() {
   expect((await call(`/events/${ev}/members`, { token: o.token, body: { email: third.email, role: "viewer" } })).status).toBe(201);
   expect((await call(`/events/${ev}/members`, { token: o.token, body: { email: editor.email, role: "editor" } })).status).toBe(201);
   expect((await call(`/events/${ev}/members`, { token: o.token, body: { email: viewer.email, role: "viewer" } })).status).toBe(201);
-  const ctx: Ctx = { ev, pid: "ALP-002", kid: key.id, iid: inv.id, sid, rid: reg.json.id, uid: third.id };
+  const made = await call(`/events/${ev}/matches`, { method: "PUT", token: o.token, body: { matches: [{ stage: "main", round: 1, slot: 1, a: "Alpha Wolves", b: "Beta Hawks" }] } });
+  expect(made.status).toBe(200);
+  const ctx: Ctx = { ev, pid: "ALP-002", kid: key.id, iid: inv.id, sid, rid: reg.json.id, uid: third.id, mid: made.json.matches[0].id };
   return { o, key, inv, editor, viewer, stranger, ctx, form };
 }
 
 describe("route inventory", () => {
   it("every registered route is covered by this matrix or explicitly public", () => {
     const covered = new Set<string>([
-      ...ROUTES.map((r) => `${r.method} ${r.path({ ev: ":id", pid: ":personId", kid: ":keyId", iid: ":inviteId", sid: ":sid", rid: ":rid", uid: ":userId" }).replace(`/${D}`, "/:x")}`),
+      ...ROUTES.map((r) => `${r.method} ${r.path({ ev: ":id", pid: ":personId", kid: ":keyId", iid: ":inviteId", sid: ":sid", rid: ":rid", uid: ":userId", mid: ":mid" }).replace(`/${D}`, "/:x")}`),
     ]);
     // normalise the matrix paths to the registered pattern shapes by only comparing method + segment count + literal prefix
     const shape = (m: string, p: string) => `${m} ${p.split("/").map((s) => (s.startsWith(":") ? ":" : s)).join("/")}`;
@@ -132,6 +137,14 @@ describe("route inventory", () => {
       if (!matrixShapes.has(k)) missing.push(`${r.method} ${r.path}`);
     }
     expect(missing).toEqual([]);
+  });
+
+  it("every routeRules key of a feature module is a registered route", async () => {
+    const mods = import.meta.glob("../src/features/*.ts", { eager: true }) as Record<string, { routeRules?: Record<string, unknown> }>;
+    const registered = new Set(app.routes.map((r) => `${r.method} ${r.path}`));
+    for (const [file, m] of Object.entries(mods)) {
+      for (const key of Object.keys(m.routeRules ?? {})) expect(registered.has(key), `${file}: ${key}`).toBe(true);
+    }
   });
 
   it("every non-public route refuses an anonymous caller with 401 (even for ids that do not exist)", async () => {

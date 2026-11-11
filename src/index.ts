@@ -11,6 +11,8 @@ import { contact } from "./routes/contact";
 import { registration } from "./routes/registration";
 import { members } from "./routes/members";
 import { live } from "./routes/live";
+import { scheduled } from "./features/reminders-cron";
+import { mountFeatures } from "./features";
 
 const app = new Hono<AppBindings>();
 
@@ -53,6 +55,7 @@ app.route("/", contact);
 app.route("/", registration);
 app.route("/", members);
 app.route("/", live);
+mountFeatures(app);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((err, c) => {
@@ -61,5 +64,8 @@ app.onError((err, c) => {
   console.error("unhandled error"); // deliberately no details: they could contain personal data
   return c.json({ error: "Internal server error" }, 500, headers);
 });
+
+// The Workers runtime reads `scheduled` from the default export (the reminder sender runs on the cron trigger in wrangler.toml).
+Object.assign(app, { scheduled });
 
 export default app;

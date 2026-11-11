@@ -50,3 +50,29 @@ export function resetMail(to: string, link: string): Mail {
   const html = `<p>Someone asked to reset the password for your Esports Hub account.</p><p><a href="${link}">Reset your password</a></p><p>The link is valid for 30 minutes.</p><p>If you did not ask for this, ignore this email, your password is unchanged.</p>`;
   return { to, subject: "Reset your Esports Hub password", text, html };
 }
+
+/** A mail that may carry extra headers (for example List-Unsubscribe). Added for reminders; the original Mail type is unchanged. */
+export interface MailWithHeaders extends Mail {
+  headers?: Record<string, string>;
+}
+
+/** Sends one mail with optional headers. Returns false when no mailer is configured. Throws when the provider refuses. Never logs the recipient or body. */
+export async function sendMailWithHeaders(env: Env, mail: MailWithHeaders): Promise<boolean> {
+  if (override) { await override.send(mail); return true; }
+  if (!env.RESEND_API_KEY) return false;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({ from: env.MAIL_FROM || DEFAULT_FROM, to: [mail.to], subject: mail.subject, html: mail.html, text: mail.text, ...(mail.headers ? { headers: mail.headers } : {}) }),
+  });
+  if (!res.ok) throw new Error(`mail provider status ${res.status}`);
+  return true;
+}
+
+/** True when sending is possible (a key or a test double). */
+export const mailerConfigured = (env: Env): boolean => getMailer(env) !== null;
+
+export function unsubscribeLink(env: Pick<Env, "APP_URL">, token: string): string {
+  const base = (env.APP_URL || DEFAULT_APP_URL).replace(/\/+$/, "");
+  return `${base}/unsubscribe/?t=${token}`;
+}
