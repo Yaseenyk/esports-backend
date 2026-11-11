@@ -16,6 +16,10 @@ database_name = "esports-db"
 database_id = "440646ae-544f-492d-86bc-9a071d883607"
 migrations_dir = "migrations"
 
+# Workers Logs (free plan; short retention, quota-limited). Needed so console.warn lines are searchable without a live tail (dev-review-r2 N-6).
+[observability]
+enabled = true
+
 # Reminder emails: due reminders go out in small batches every 15 minutes (src/features/reminders-cron.ts).
 [triggers]
 crons = ["*/15 * * * *"]
@@ -35,3 +39,6 @@ binding = "DB"
 database_name = "esports-db-staging"
 database_id = "2d843d9a-77a6-4212-8d80-bd0102216b9f"
 migrations_dir = "migrations"
+
+[env.staging.observability]
+enabled = true

@@ -1,0 +1,84 @@
+name: Deploy
+# Push to main: test -> staging -> smoke check -> production. Migrations are NEVER run here (see migrate.yml).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits instead of cancelling a half-finished rollout.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  STAGING_URL: https://esports-api-staging.yaseenyk.workers.dev
+  PRODUCTION_URL: https://esports-api.yaseenyk.workers.dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Deploy to staging
+        run: npx wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke check staging (GET / must return ok:true)
+        run: |
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -fsS --max-time 15 "$STAGING_URL/" || true)
+            echo "attempt $i: $body"
+            echo "$body" | grep -q '"ok":true' && exit 0
+            sleep 10
+          done
+          echo "Staging health check failed; production deploy is blocked." >&2
+          exit 1
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Deploy to production
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke check production
+        run: |
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -fsS --max-time 15 "$PRODUCTION_URL/" || true)
+            echo "attempt $i: $body"
+            echo "$body" | grep -q '"ok":true' && exit 0
+            sleep 10
+          done
+          echo "Production health check failed after deploy: roll back with wrangler rollback." >&2
+          exit 1
