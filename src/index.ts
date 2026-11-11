@@ -60,7 +60,7 @@ mountFeatures(app);
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((err, c) => {
   const headers = { "x-content-type-options": "nosniff" };
-  if (err instanceof HttpError) return c.json({ error: err.message }, err.status, headers);
+  if (err instanceof HttpError) return c.json({ ...err.extra, error: err.message }, err.status, headers);
   console.error("unhandled error"); // deliberately no details: they could contain personal data
   return c.json({ error: "Internal server error" }, 500, headers);
 });

@@ -4,6 +4,7 @@ import { hashPassword, iterationsFrom, pwFingerprint, randomToken, sha256, signJ
 import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, str } from "../http";
 import { getMailer, resetLink, resetMail } from "../mailer";
 import { requireUser } from "../auth";
+import { handoverStatements, planOwnershipHandover } from "../ownership";
 
 export const auth = new Hono<AppBindings>();
 
@@ -93,15 +94,41 @@ auth.post("/auth/change-password", requireUser, async (c) => {
   return c.json({ ok: true, token: await signJwt(u.id, c.env.JWT_SECRET, await pwFingerprint({ pw_hash: h.hash, pw_salt: h.salt })) });
 });
 
-/** Delete the account and everything under it (events, rosters, photos, check-ins, links). Needs the password. */
+/**
+ * Delete the account and everything under it (rosters, photos, check-ins, links). Needs the password.
+ * Events that other people work on are protected (see src/ownership.ts): an event with a co-organiser (editor) is handed to the
+ * earliest-added editor; an event with only viewers is deleted only when the request says `deleteEvents: true`.
+ * Events nobody else is part of are deleted with the account, as before.
+ */
 auth.post("/auth/delete-account", requireUser, async (c) => {
   await rateLimit(c, "pwchange", 10, 15 * 60);
   const body = await readJson(c);
   const u = await c.env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(c.get("userId")).first<UserRow>();
   const pw = typeof body.password === "string" ? body.password : "";
   if (!u || !(await verifyPassword(pw, u.pw_hash, u.pw_salt, u.pw_iter))) throw new HttpError(401, "Password is wrong");
-  await c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id).run();
-  return c.json({ ok: true });
+  if (body.deleteEvents !== undefined && typeof body.deleteEvents !== "boolean") throw new HttpError(400, "deleteEvents must be true or false");
+  const plan = await planOwnershipHandover(c.env.DB, u.id);
+  if (plan.tooMany) {
+    throw new HttpError(409, "You share more than 50 events with other organisers. Remove some co-organisers or delete some events first, then delete your account.", { code: "too_many_shared_events" });
+  }
+  if (plan.conflicts.length) {
+    const first = plan.conflicts[0]!;
+    throw new HttpError(
+      409,
+      `${first.newOwnerName} cannot take over "${first.name}" because they already have an event with the same key ("${first.slug}"). Remove them as a co-organiser or ask them to rename their event, then try again. Nothing was deleted.`,
+      { code: "ownership_conflict", events: plan.conflicts.map((e) => ({ id: e.id, name: e.name, newOwnerName: e.newOwnerName })) },
+    );
+  }
+  if (plan.needDeleteConfirmation.length && body.deleteEvents !== true) {
+    const names = plan.needDeleteConfirmation.map((e) => `"${e.name}"`).slice(0, 5).join(", ");
+    throw new HttpError(
+      409,
+      `No co-organiser can take over ${names}${plan.needDeleteConfirmation.length > 5 ? " and more" : ""}, so deleting your account will delete ${plan.needDeleteConfirmation.length === 1 ? "this event" : "these events"} for the people who view ${plan.needDeleteConfirmation.length === 1 ? "it" : "them"} too. To go ahead, confirm that you also want to delete your events.`,
+      { code: "events_need_delete_confirmation", events: plan.needDeleteConfirmation.map((e) => ({ id: e.id, name: e.name })) },
+    );
+  }
+  await c.env.DB.batch([...handoverStatements(c.env.DB, u.id, plan.handovers), c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id)]);
+  return c.json(plan.handovers.length ? { ok: true, handedOver: plan.handovers.map((h) => ({ id: h.id, name: h.name, newOwnerName: h.newOwnerName })) } : { ok: true });
 });
 
 const RESET_TTL_MS = 30 * 60_000;

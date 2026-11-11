@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppBindings, Env } from "../types";
-import { HttpError, idStr, nowIso, rateLimit, rateLimitSubject, readJson, str } from "../http";
+import { HttpError, idStr, nowIso, rateLimit, rateLimitSoft, rateLimitSubject, readJson, str } from "../http";
 import { ownedEvent, requireUser } from "../auth";
 import { resolveCaptainToken } from "../captains";
 import { applyResult, listMatches, upsertMatches, type Match } from "../matches";
@@ -155,7 +155,7 @@ routes.post("/events/:id/ready/:mid/clear", requireUser, async (c) => {
 // ---------- captain (public) ----------
 
 routes.get("/public/ready/:token", async (c) => {
-  await rateLimit(c, "readyPubGet", 120, 60);
+  rateLimitSoft(c, "readyPubGet", 120, 60);
   const ctx = await resolveCaptainToken(c.env, c.req.param("token"));
   if (!ctx) throw new HttpError(404, "This link is not valid. Ask the organiser for a new one.");
   const grace = await graceFor(c.env, ctx.eventId);

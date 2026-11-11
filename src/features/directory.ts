@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import type { RouteRules } from "./types";
-import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, type Ctx } from "../http";
+import { HttpError, nowIso, rateLimit, rateLimitSoft, rateLimitSubject, readJson, type Ctx } from "../http";
 import { ownedEvent, requireUser } from "../auth";
 import { randomToken, sha256 } from "../crypto";
 import { DEFAULT_APP_URL } from "../mailer";
@@ -18,7 +18,10 @@ export const routeRules: RouteRules = {
 
 const MODES = ["in-person", "online", "hybrid"] as const;
 const PAGE = 20;
-export const HIDE_AT = 3; // distinct reporters that hide an entry until the owner edits it
+export const HIDE_AT = 3; // distinct reporters (open reports only) that hide an entry
+// Once a listing has been hidden by reports, an owner edit resolves the reports but does NOT bring it back: it is held (directory_entries.held_at)
+// until a person restores it (src/directory-admin.ts, for the Phase 1 admin). Only unresolved reports count towards HIDE_AT.
+export const HELD_NOTE = "This listing was hidden after reports from other people. Saving changes does not bring it back. Contact us and we will look at it.";
 const CONTACT_MSG = "Please do not put contact details here: players register through the link";
 
 /** Strips control characters and collapses whitespace. */
@@ -46,13 +49,13 @@ export function validDate(s: string): boolean {
 }
 const dayShift = (days: number) => new Date(Date.now() + days * 86400_000).toISOString().slice(0, 10);
 
-interface Row { event_id: string; listed: number; title: string; game: string; city: string; mode: string; starts_on: string; blurb: string; reg_link: string; updated_at: string }
+interface Row { event_id: string; listed: number; title: string; game: string; city: string; mode: string; starts_on: string; blurb: string; reg_link: string; updated_at: string; held_at: string | null }
 const readEntry = (c: Ctx, eventId: string) =>
-  c.env.DB.prepare("SELECT event_id, listed, title, game, city, mode, starts_on, blurb, reg_link, updated_at FROM directory_entries WHERE event_id = ?").bind(eventId).first<Row>();
+  c.env.DB.prepare("SELECT event_id, listed, title, game, city, mode, starts_on, blurb, reg_link, updated_at, held_at FROM directory_entries WHERE event_id = ?").bind(eventId).first<Row>();
 const shape = (r: Row) => ({ listed: r.listed === 1, title: r.title, game: r.game, city: r.city, mode: r.mode, startsOn: r.starts_on, blurb: r.blurb, updatedAt: r.updated_at });
 
 const reportCount = async (c: Ctx, eventId: string) =>
-  (await c.env.DB.prepare("SELECT COUNT(DISTINCT reporter) AS n FROM directory_reports WHERE event_id = ?").bind(eventId).first<{ n: number }>())?.n ?? 0;
+  (await c.env.DB.prepare("SELECT COUNT(DISTINCT reporter) AS n FROM directory_reports WHERE event_id = ? AND resolved_at IS NULL").bind(eventId).first<{ n: number }>())?.n ?? 0;
 
 async function registrationLink(c: Ctx, eventId: string): Promise<string | null> {
   const f = await c.env.DB.prepare("SELECT token FROM registration_forms WHERE event_id = ?").bind(eventId).first<{ token: string }>();
@@ -69,7 +72,9 @@ routes.get("/events/:id/directory", requireUser, async (c) => {
     entry: row ? shape(row) : null,
     hasRegistration: (await registrationLink(c, ev.id)) !== null,
     reports,
-    hidden: !!row && row.listed === 1 && reports >= HIDE_AT,
+    hidden: !!row && row.listed === 1 && (reports >= HIDE_AT || row.held_at !== null),
+    held: !!row && row.held_at !== null,
+    ...(row && row.held_at !== null ? { heldNote: HELD_NOTE } : {}),
     defaults: { title: ev.name, game: ev.game, city: "", mode: "in-person", startsOn: validDate(ev.date) ? ev.date : "" },
   });
 });
@@ -110,11 +115,14 @@ routes.put("/events/:id/directory", requireUser, async (c) => {
     c.env.DB.prepare(
       "INSERT INTO directory_entries (event_id, listed, title, game, city, mode, starts_on, blurb, reg_link, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO UPDATE SET listed = excluded.listed, title = excluded.title, game = excluded.game, city = excluded.city, mode = excluded.mode, starts_on = excluded.starts_on, blurb = excluded.blurb, reg_link = excluded.reg_link, updated_at = excluded.updated_at",
     ).bind(ev.id, listed ? 1 : 0, title, game, city, mode, startsOn, blurb, regLink, at),
-    // An edit by the owner clears the reports, so a hidden listing comes back once it has been looked at.
-    c.env.DB.prepare("DELETE FROM directory_reports WHERE event_id = ?").bind(ev.id),
+    // A listing that is hidden right now (enough open reports) is held until a person restores it; an owner edit alone does not bring it back.
+    c.env.DB.prepare("UPDATE directory_entries SET held_at = ?2 WHERE event_id = ?1 AND held_at IS NULL AND (SELECT COUNT(DISTINCT reporter) FROM directory_reports WHERE event_id = ?1 AND resolved_at IS NULL) >= ?3").bind(ev.id, at, HIDE_AT),
+    // The edit resolves the open reports; they stay as history instead of being deleted.
+    c.env.DB.prepare("UPDATE directory_reports SET resolved_at = ?2 WHERE event_id = ?1 AND resolved_at IS NULL").bind(ev.id, at),
   ]);
-  const row = await readEntry(c, ev.id);
-  return c.json({ entry: shape(row!), reports: 0, hidden: false });
+  const row = (await readEntry(c, ev.id))!;
+  const held = row.held_at !== null;
+  return c.json({ entry: shape(row), reports: 0, hidden: held && row.listed === 1, held, ...(held ? { heldNote: HELD_NOTE } : {}) });
 });
 
 // ---------- public ----------
@@ -127,7 +135,7 @@ function filter(v: string | undefined, name: string): string | null {
 }
 
 routes.get("/public/directory", async (c) => {
-  await rateLimit(c, "directoryList", 120, 60);
+  rateLimitSoft(c, "directoryList", 120, 60);
   const game = filter(c.req.query("game"), "game");
   const city = filter(c.req.query("city"), "city");
   const mode = c.req.query("mode") ?? null;
@@ -138,10 +146,10 @@ routes.get("/public/directory", async (c) => {
   const today = dayShift(0);
   const from = dayShift(-7); // an event stays visible, marked as ended, for a week
   const rows = await c.env.DB.prepare(
-    "SELECT d.event_id, d.title, d.game, d.city, d.mode, d.starts_on, d.blurb, d.reg_link FROM directory_entries d WHERE d.listed = 1 AND d.starts_on >= ?1 AND (?2 IS NULL OR d.game = ?2 COLLATE NOCASE) AND (?3 IS NULL OR d.city = ?3 COLLATE NOCASE) AND (?4 IS NULL OR d.mode = ?4) AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id) < ?5 ORDER BY d.starts_on DESC, d.event_id LIMIT ?6 OFFSET ?7",
+    "SELECT d.event_id, d.title, d.game, d.city, d.mode, d.starts_on, d.blurb, d.reg_link FROM directory_entries d WHERE d.listed = 1 AND d.held_at IS NULL AND d.starts_on >= ?1 AND (?2 IS NULL OR d.game = ?2 COLLATE NOCASE) AND (?3 IS NULL OR d.city = ?3 COLLATE NOCASE) AND (?4 IS NULL OR d.mode = ?4) AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id AND r.resolved_at IS NULL) < ?5 ORDER BY d.starts_on DESC, d.event_id LIMIT ?6 OFFSET ?7",
   ).bind(from, game, city, mode || null, HIDE_AT, PAGE + 1, (page - 1) * PAGE).all<Row>();
   const all = await c.env.DB.prepare(
-    "SELECT d.game AS game, d.city AS city FROM directory_entries d WHERE d.listed = 1 AND d.starts_on >= ?1 AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id) < ?2 LIMIT 500",
+    "SELECT d.game AS game, d.city AS city FROM directory_entries d WHERE d.listed = 1 AND d.held_at IS NULL AND d.starts_on >= ?1 AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id AND r.resolved_at IS NULL) < ?2 LIMIT 500",
   ).bind(from, HIDE_AT).all<{ game: string; city: string }>();
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort((a, b) => a.localeCompare(b)).slice(0, 60);
   const body = JSON.stringify({

@@ -6,6 +6,8 @@ export class HttpError extends Error {
   constructor(
     public status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 429 | 500,
     message: string,
+    /** Extra JSON fields next to `error` in the response body (for example a machine-readable `code`). */
+    public extra?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -94,21 +96,62 @@ export const nowIso = () => new Date().toISOString();
 export const inHours = (h: number | null) => (h === null ? null : new Date(Date.now() + h * 3600_000).toISOString());
 
 // ---------- rate limiting ----------
+/**
+ * Exact limiter, stored in D1 (one write per call). Use it only where exactness matters or the route is rare:
+ * sign-in and other credential routes, forgot-password, failed gate/token guesses, registration submits, contact and reports.
+ * If D1 itself fails the request is refused (fail closed): a credential route must never become unthrottled because the limiter broke.
+ * Old windows are removed by the daily cron step (cleanupRateLimits), not here.
+ */
 export async function rateLimit(c: Ctx, scope: string, limit: number, windowSec: number, extra = ""): Promise<void> {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
   const key = await sha256(`${c.env.JWT_SECRET}|${scope}|${extra}|${ip}`);
   const nowSec = Math.floor(Date.now() / 1000);
   const ws = Math.floor(nowSec / windowSec) * windowSec;
-  const row = await c.env.DB.prepare(
-    "INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1) ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1 RETURNING count",
-  )
-    .bind(key, ws)
-    .first<{ count: number }>();
-  if (Math.random() < 0.01) {
-    // opportunistic cleanup of old windows
-    c.executionCtx.waitUntil(c.env.DB.prepare("DELETE FROM rate_limits WHERE window_start < ?").bind(nowSec - 86400).run());
+  let row: { count: number } | null;
+  try {
+    row = await c.env.DB.prepare(
+      "INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1) ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1 RETURNING count",
+    )
+      .bind(key, ws)
+      .first<{ count: number }>();
+  } catch {
+    console.error("rate limiter unavailable"); // no details
+    throw new HttpError(500, "The service is busy. Please try again in a minute.");
   }
   if (row && row.count > limit) throw new HttpError(429, "Too many requests, try again later");
+}
+
+// Soft limiter: counters live in this isolate's memory only. No D1, so a public read costs no database write and cannot fail with it.
+// An address usually reaches the same isolate; if several isolates serve one address the real ceiling is a small multiple of the limit.
+// SOFT_FACTOR scales every soft limit (1 = the stated number per isolate).
+const SOFT_MAX_ENTRIES = 5000;
+export const SOFT_FACTOR = 1;
+const softBuckets = new Map<string, { ws: number; n: number }>();
+
+/** In-memory limiter for public GETs and the hit route. Bounded (5,000 entries, oldest dropped). Throws 429 over the limit; never touches D1. */
+export function rateLimitSoft(c: Ctx, scope: string, limit: number, windowSec: number, extra = ""): void {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const key = `${scope}|${extra}|${ip}`;
+  const ws = Math.floor(Date.now() / 1000 / windowSec) * windowSec;
+  const cur = softBuckets.get(key);
+  let n: number;
+  if (cur && cur.ws === ws) {
+    n = ++cur.n;
+  } else {
+    n = 1;
+    softBuckets.delete(key); // re-insert at the end: a Map keeps insertion order, so its first key is the oldest
+    softBuckets.set(key, { ws, n });
+    if (softBuckets.size > SOFT_MAX_ENTRIES) softBuckets.delete(softBuckets.keys().next().value as string);
+  }
+  if (n > limit * SOFT_FACTOR) throw new HttpError(429, "Too many requests, try again later");
+}
+
+/** Number of counters held by the soft limiter (a test hook: it must never exceed 5,000). */
+export const softLimiterSize = (): number => softBuckets.size;
+
+/** Daily housekeeping: drops rate-limit windows older than a day. Called from the cron handler. */
+export async function cleanupRateLimits(db: D1Database, nowMs = Date.now()): Promise<void> {
+  await db.prepare("DELETE FROM rate_limits WHERE window_start < ?").bind(Math.floor(nowMs / 1000) - 86400).run();
 }
 
 /** Limit keyed by an arbitrary subject (for example a normalised email), independent of the caller's IP. The subject is only stored hashed. */

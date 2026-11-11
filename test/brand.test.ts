@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { call, newEvent, newUser, pngDataUrl, setupEvent } from "./helpers";
+import { callDirect } from "./golden/direct";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -158,7 +159,7 @@ describe("public kit by slug", () => {
   it("is rate limited", async () => {
     const ip = "203.0.113.77";
     let last = 0;
-    for (let i = 0; i < 245; i++) last = (await call("/public/brand/aaaaaaaaaaaa", { ip })).status;
+    for (let i = 0; i < 245; i++) last = (await callDirect("/public/brand/aaaaaaaaaaaa", { ip })).status; // direct: in-memory limiter, and fast enough to stay inside one minute
     expect(last).toBe(429);
   });
 });

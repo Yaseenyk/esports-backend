@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import type { RouteRules } from "./types";
-import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, str, type Ctx } from "../http";
+import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, str, type Ctx } from "../http";
 import { randomToken, sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 
@@ -114,7 +114,7 @@ routes.delete("/events/:id/runofshow/link", requireUser, async (c) => {
 });
 
 routes.get("/public/run/:token", async (c) => {
-  await rateLimit(c, "runPublic", 120, 60);
+  rateLimitSoft(c, "runPublic", 120, 60);
   const token = c.req.param("token");
   if (!TOKEN_RE.test(token)) throw new HttpError(404, "not_found");
   const link = await c.env.DB.prepare(

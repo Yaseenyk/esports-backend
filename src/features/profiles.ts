@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import type { RouteRules } from "./types";
-import { HttpError, ID_RE, nowIso, rateLimit, rateLimitSubject, readJson, type Ctx } from "../http";
+import { HttpError, ID_RE, nowIso, rateLimitSoft, rateLimitSubject, readJson, type Ctx } from "../http";
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { deriveWinner, listBr, listMatches, type BrResult, type Match } from "../matches";
@@ -209,7 +209,7 @@ routes.post("/profiles/:id/unlink", requireUser, async (c) => {
 });
 
 routes.get("/public/team/:slug", async (c) => {
-  await rateLimit(c, "teamPublic", 240, 60);
+  rateLimitSoft(c, "teamPublic", 240, 60);
   const slug = c.req.param("slug");
   if (!SLUG_RE.test(slug)) throw new HttpError(404, "not_found");
   const p = await c.env.DB.prepare("SELECT id, name, blurb, links, updated_at FROM team_profiles WHERE slug = ? AND published = 1")

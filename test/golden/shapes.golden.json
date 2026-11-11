@@ -1,0 +1,14 @@
+{
+  "DELETE /events/:id/members/:uid": {"ok":"boolean"},
+  "GET /events": [{"createdAt":"string","date":"string","emergency":"string","game":"string","id":"string","key":"string","name":"string","organiser":"string","role":"string","rules":"string","settings":{"a":"number"},"updatedAt":"string","venue":"string"}],
+  "GET /events (viewer sees role)": [{"createdAt":"string","date":"string","emergency":"string","game":"string","id":"string","key":"string","name":"string","organiser":"string","role":"string","rules":"string","settings":{"a":"number"},"updatedAt":"string","venue":"string"}],
+  "GET /events/:id": {"createdAt":"string","date":"string","emergency":"string","game":"string","id":"string","key":"string","name":"string","organiser":"string","rules":"string","settings":{"a":"number"},"updatedAt":"string","venue":"string"},
+  "GET /events/:id/members": {"members":[{"addedAt":"string","email":"string","name":"string","role":"string","userId":"string"}],"owner":{"email":"string","name":"string","userId":"string"}},
+  "GET /me": {"createdAt":"string","email":"string","id":"string","name":"string"},
+  "POST /auth/login": {"token":"string","user":{"createdAt":"string","email":"string","id":"string","name":"string"}},
+  "POST /auth/register": {"token":"string","user":{"createdAt":"string","email":"string","id":"string","name":"string"}},
+  "POST /events": {"createdAt":"string","date":"string","emergency":"string","game":"string","id":"string","key":"string","name":"string","organiser":"string","rules":"string","settings":{"a":"number"},"updatedAt":"string","venue":"string"},
+  "POST /events status": 201,
+  "POST /events/:id/members": {"email":"string","name":"string","role":"string","userId":"string"},
+  "PUT /events/:id": {"createdAt":"string","date":"string","emergency":"string","game":"string","id":"string","key":"string","name":"string","organiser":"string","rules":"string","settings":{"a":"number"},"updatedAt":"string","venue":"string"}
+}

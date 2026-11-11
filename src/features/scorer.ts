@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppBindings, Env } from "../types";
-import { HttpError, idStr, inHours, nowIso, rateLimit, rateLimitSubject, readJson, str, type Ctx } from "../http";
+import { HttpError, idStr, inHours, nowIso, rateLimit, rateLimitSoft, rateLimitSubject, readJson, str, type Ctx } from "../http";
 import { ownedEvent, requireUser } from "../auth";
 import { randomToken, sha256 } from "../crypto";
 import { applyResult, listBr, listMatches, putBr, upsertMatches, type Match } from "../matches";
@@ -94,7 +94,7 @@ const notFound = () => new HttpError(404, "This scoring link is not valid. Ask t
 
 /** Resolves a token to its scope. Unknown, malformed, revoked and expired all give the same 404. Failed lookups are throttled per IP. */
 async function resolve(c: Ctx, token: string, perTokenLimit: number): Promise<Scope> {
-  await rateLimit(c, "scoreIp", 600, 600);
+  rateLimitSoft(c, "scoreIp", 600, 600);
   if (typeof token !== "string" || !TOKEN_RE.test(token)) { await rateLimit(c, "scoreFail", 20, 600); throw notFound(); }
   const hash = await sha256(token);
   const r = await c.env.DB.prepare("SELECT id, event_id, label, stage, expires_at, revoked_at, created_at FROM scorer_links WHERE token_hash = ?").bind(hash).first<LinkRow>();

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
-import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, type Ctx } from "../http";
+import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, type Ctx } from "../http";
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { listMatches, publicMatch } from "../matches";
@@ -139,7 +139,7 @@ live.put("/events/:id/live", requireUser, async (c) => {
 });
 
 live.get("/public/live/:slug", async (c) => {
-  await rateLimit(c, "livePublic", 240, 60);
+  rateLimitSoft(c, "livePublic", 240, 60);
   const slug = c.req.param("slug");
   if (!SLUG_RE.test(slug)) throw new HttpError(404, "not_found");
   const row = await c.env.DB.prepare(

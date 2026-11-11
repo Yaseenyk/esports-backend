@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { sha256 } from "../src/crypto";
 import { call, freshIp, newEvent, newUser, pngDataUrl, setupEvent } from "./helpers";
+import { callDirect } from "./golden/direct";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -234,12 +235,10 @@ describe("live page, rate limits", () => {
 
   it("public GET is limited to 240 per minute per address", async () => {
     const ip = freshIp();
-    // Real requests are too slow to reach 240 inside one minute, so put the counter just under the limit the way the limiter would have.
-    const key = await sha256(`${env.JWT_SECRET}|livePublic||${ip}`);
-    const ws = Math.floor(Date.now() / 1000 / 60) * 60;
-    await env.DB.prepare("INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 239)").bind(key, ws).run();
-    expect((await call("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(404); // 240th
-    expect((await call("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(429); // 241st
-    expect((await call("/public/live/aaaaaaaaaaaa", { ip: freshIp() })).status).toBe(404);
+    // The limiter is in memory now (no D1 row to pre-seed), so make the 240 real requests; direct calls are fast enough to stay inside one minute.
+    for (let i = 0; i < 239; i++) expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(404);
+    expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(404); // 240th
+    expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(429); // 241st
+    expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip: freshIp() })).status).toBe(404);
   });
 });

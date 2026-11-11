@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { restoreDirectoryListing } from "../src/directory-admin";
 import { describe, expect, it, vi } from "vitest";
 import { call, freshIp, newUser, setupEvent } from "./helpers";
 
@@ -128,7 +129,7 @@ describe("directory, public list", () => {
 describe("directory, reports", () => {
   const report = (id: string, ip = freshIp(), reason = "Looks fake") => call(`/public/directory/${id}/report`, { body: { reason }, ip });
 
-  it("three different reporters hide an entry; an owner edit brings it back", async () => {
+  it("three different reporters hide an entry; an owner edit resolves the reports but the listing stays hidden until a person restores it", async () => {
     const o = await listed({ game: "RepGame" });
     const shown = async () => (await list("?game=RepGame")).json.entries.some((e: any) => e.id === o.ev.id);
     expect(await shown()).toBe(true);
@@ -140,8 +141,39 @@ describe("directory, reports", () => {
     const g = await call(`/events/${o.ev.id}/directory`, { token: o.token });
     expect(g.json.reports).toBe(3);
     expect(g.json.hidden).toBe(true);
-    await put(o.ev.id, o.token, { blurb: "Updated text" });
+    const edit = await put(o.ev.id, o.token, { blurb: "Updated text" });
+    expect(edit.json).toMatchObject({ reports: 0, hidden: true, held: true });
+    expect(edit.json.heldNote).toContain("Contact us");
+    expect(await shown()).toBe(false); // an edit alone no longer brings it back
+    // the history is kept: three resolved reports, none open
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n, SUM(resolved_at IS NOT NULL) AS done FROM directory_reports WHERE event_id = ?").bind(o.ev.id).first<{ n: number; done: number }>();
+    expect(rows).toEqual({ n: 3, done: 3 });
+    const g2 = await call(`/events/${o.ev.id}/directory`, { token: o.token });
+    expect(g2.json).toMatchObject({ reports: 0, hidden: true, held: true });
+    // relisting stays hidden too
+    await put(o.ev.id, o.token, { listed: false });
+    await put(o.ev.id, o.token, { listed: true });
+    expect(await shown()).toBe(false);
+    // a person restores it with the internal helper (no public route exists)
+    expect(await restoreDirectoryListing(env.DB, o.ev.id)).toBe(true);
     expect(await shown()).toBe(true);
+    expect((await call(`/events/${o.ev.id}/directory`, { token: o.token })).json).toMatchObject({ hidden: false, held: false });
+    // after the restore, fresh reports count again from zero
+    for (let i = 0; i < 2; i++) await report(o.ev.id);
+    expect(await shown()).toBe(true);
+    await report(o.ev.id);
+    expect(await shown()).toBe(false);
+  });
+
+  it("an owner edit while the listing is NOT hidden resolves open reports without holding it", async () => {
+    const o = await listed({ game: "RepGame3" });
+    await report(o.ev.id);
+    await report(o.ev.id);
+    const edit = await put(o.ev.id, o.token, { blurb: "Fine" });
+    expect(edit.json).toMatchObject({ hidden: false, held: false });
+    expect((await list("?game=RepGame3")).json.entries).toHaveLength(1);
+    await report(o.ev.id); // one open report only: two were resolved
+    expect((await list("?game=RepGame3")).json.entries).toHaveLength(1);
   });
 
   it("one address counts once, and is limited to 5 an hour", async () => {

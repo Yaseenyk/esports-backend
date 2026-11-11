@@ -43,17 +43,18 @@ describe("hit counter", () => {
     expect((await report(counted.id, counted.o.token)).json.total).toBe(1);
   });
 
-  it("the same visitor, page, source and view within 30 seconds counts once; other views still count", async () => {
+  it("every accepted call is one page load: there is no per-visitor de-duplication any more (nothing about the visitor is stored)", async () => {
     const p = await published();
     const ip = "198.51.100.7";
-    expect((await hit(p.slug, { source: "overlay", view: "table" }, ip)).status).toBe(204);
-    expect((await hit(p.slug, { source: "overlay", view: "table" }, ip)).status).toBe(204);
-    expect((await hit(p.slug, { source: "overlay", view: "schedule" }, ip)).status).toBe(204);
-    expect((await hit(p.slug, { source: "embed", view: "table" }, ip)).status).toBe(204);
-    expect((await report(p.id, p.o.token)).json.total).toBe(3);
+    for (const b of [{ source: "overlay", view: "table" }, { source: "overlay", view: "table" }, { source: "overlay", view: "schedule" }, { source: "embed", view: "table" }]) {
+      expect((await hit(p.slug, b, ip)).status).toBe(204);
+    }
+    const r = await report(p.id, p.o.token);
+    expect(r.json.total).toBe(4);
+    expect(r.json.byView).toContainEqual({ source: "overlay", view: "table", hits: 2 });
   });
 
-  it("is rate limited per hashed address (60 a minute, so a flood cannot inflate the numbers much)", async () => {
+  it("is rate limited per address, in memory (60 a minute, so a flood cannot inflate the numbers much)", async () => {
     const p = await published();
     const ip = `198.51.100.${Math.floor(Math.random() * 200) + 20}`;
     let limited = 0;

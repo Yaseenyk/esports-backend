@@ -1,14 +1,14 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
-import { HttpError, rateLimit, rateLimitSubject, readJson, type Ctx } from "../http";
-import { sha256 } from "../crypto";
+import { HttpError, rateLimitSoft, rateLimitSubject, readJson } from "../http";
 import { ownedEvent, requireUser } from "../auth";
 import type { RouteRules } from "./types";
 
 /**
  * Privacy-friendly page-load counters. A hit increments one number per (event, UTC day, source, view).
- * The visitor's address is used only to rate limit and to ignore a repeat within 30 seconds, and then only as a salted hash in the
- * shared rate_limits table. No visitor is ever stored in live_hits.
+ * Every call counts as one page load (the client sends one hit per load), so the number is page loads, not people.
+ * The visitor's address is used only for an in-memory rate limit (no database write); no visitor is ever stored in live_hits.
+ * A hit costs at most one database write: the counter upsert.
  */
 export const routes = new Hono<AppBindings>();
 
@@ -19,17 +19,16 @@ const VIEW_RE = /^[a-z0-9_-]{0,20}$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 90;
 const DAY_MS = 86_400_000;
-const DEDUPE_SEC = 30;
 
 export const routeRules: RouteRules = {
-  "POST /public/hit/:slug": { public: true, limit: "60/minute/hashed IP; a repeat of the same page and view within 30 s counts once" },
+  "POST /public/hit/:slug": { public: true, limit: "60/minute per address, in memory (no database write); every accepted call counts as one page load" },
   "GET /events/:id/sponsor-report": { roles: ["owner", "editor", "viewer"], limit: "120/hour/user" },
 };
 
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 routes.post("/public/hit/:slug", async (c) => {
-  await rateLimit(c, "hit", 60, 60);
+  rateLimitSoft(c, "hit", 60, 60);
   const b = await readJson(c, 512);
   const source = b.source;
   if (typeof source !== "string" || !(SOURCES as readonly string[]).includes(source)) throw new HttpError(400, "source must be one of live, overlay, embed");
@@ -41,24 +40,11 @@ routes.post("/public/hit/:slug", async (c) => {
   if (!SLUG_RE.test(slug)) return done();
   const row = await c.env.DB.prepare("SELECT event_id FROM live_pages WHERE slug = ? AND published = 1").bind(slug).first<{ event_id: string }>();
   if (!row) return done();
-  if (await isRepeat(c, slug, source as Source, view)) return done();
   await c.env.DB.prepare(
     "INSERT INTO live_hits (event_id, day, source, view, hits) VALUES (?, ?, ?, ?, 1) ON CONFLICT (event_id, day, source, view) DO UPDATE SET hits = hits + 1",
   ).bind(row.event_id, dayOf(Date.now()), source, view).run();
   return done();
 });
-
-/** True when the same hashed address already counted this page, source and view in the last 30 seconds. Kept only in rate_limits (cleaned up there), not a log. */
-async function isRepeat(c: Ctx, slug: string, source: Source, view: string): Promise<boolean> {
-  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const key = await sha256(`${c.env.JWT_SECRET}|hitdedupe|${slug}|${source}|${view}|${ip}`);
-  const now = Math.floor(Date.now() / 1000);
-  const last = await c.env.DB.prepare("SELECT MAX(window_start) AS t FROM rate_limits WHERE key = ?").bind(key).first<{ t: number | null }>();
-  if (last?.t != null && now - last.t < DEDUPE_SEC) return true;
-  await c.env.DB.prepare("DELETE FROM rate_limits WHERE key = ?").bind(key).run();
-  await c.env.DB.prepare("INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1) ON CONFLICT (key, window_start) DO NOTHING").bind(key, now).run();
-  return false;
-}
 
 function parseDay(v: string | undefined, name: string): number | null {
   if (v === undefined || v === "") return null;

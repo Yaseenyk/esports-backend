@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import type { RouteRules } from "./types";
-import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, type Ctx } from "../http";
+import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, type Ctx } from "../http";
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { listBr, listMatches, publicMatch } from "../matches";
@@ -140,7 +140,7 @@ routes.put("/events/:id/league", requireUser, async (c) => {
 });
 
 routes.get("/public/league/:slug", async (c) => {
-  await rateLimit(c, "leaguePublic", 240, 60);
+  rateLimitSoft(c, "leaguePublic", 240, 60);
   const slug = c.req.param("slug");
   if (!SLUG_RE.test(slug)) throw new HttpError(404, "not_found");
   const row = await c.env.DB.prepare(

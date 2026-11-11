@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
-import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, str, type Ctx } from "../http";
+import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, str, type Ctx } from "../http";
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { validateLogo } from "../images";
@@ -82,7 +82,7 @@ routes.delete("/events/:id/brand", requireUser, async (c) => {
 });
 
 routes.get("/public/brand/:slug", async (c) => {
-  await rateLimit(c, "brandPublic", 240, 60);
+  rateLimitSoft(c, "brandPublic", 240, 60);
   const slug = c.req.param("slug");
   if (!SLUG_RE.test(slug)) throw new HttpError(404, "not_found");
   const ev = await c.env.DB.prepare("SELECT e.id AS id, e.owner_id AS owner_id FROM live_pages l JOIN events e ON e.id = l.event_id WHERE l.slug = ? AND l.published = 1")
