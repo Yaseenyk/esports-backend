@@ -60,6 +60,9 @@ describe("duplicate: permissions", () => {
     expect(Object.keys(r.json).sort()).toEqual(["createdAt", "date", "emergency", "game", "id", "key", "name", "organiser", "rules", "settings", "updatedAt", "venue"]);
     expect((await q("SELECT owner_id FROM events WHERE id = ?", r.json.id))[0].owner_id).toBe(w.editor.id);
     expect((await dup(w.id, w.editor.token, { name: `M2 ${uniq()}`, include: { members: true } })).status).toBe(403);
+    // the people of an event are its personal data: an editor cannot copy them into an account of their own (the owner can)
+    expect((await dup(w.id, w.editor.token, { name: `M3 ${uniq()}`, include: { teams: true, people: true } })).status).toBe(403);
+    expect((await dup(w.id, w.o.token, { name: `M4 ${uniq()}`, include: { teams: true, people: true } })).status).toBe(201);
     const list = (await call("/events", { token: w.editor.token })).json as any[];
     expect(list.find((e) => e.id === r.json.id).role).toBe("owner");
   });

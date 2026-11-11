@@ -70,6 +70,8 @@ routes.post("/events/:id/duplicate", requireUser, async (c) => {
   const date = b.date === undefined || b.date === null ? src.date : optStr(b.date, "date", 40);
   const inc = parseInclude(b.include);
   if (inc.members && src.my_role !== "owner") throw new HttpError(403, "Only the owner of the event can bring its editors and viewers over");
+  // People are the event's personal data: an editor works on the event but must not be able to copy its people into an account of their own.
+  if (inc.people && src.my_role !== "owner") throw new HttpError(403, "Only the owner of the event can bring its people over");
   const db = c.env.DB;
 
   // Simple guard: the same name by the same user within 10 seconds is the first request again (a double tap), not a new event.
