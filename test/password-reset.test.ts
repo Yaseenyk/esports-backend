@@ -54,7 +54,7 @@ describe("password reset", () => {
     const dump = JSON.stringify((await env.DB.prepare("SELECT * FROM password_resets").all()).results);
     expect(dump).not.toContain(token);
     const ttl = Date.parse(rows.results[0]!.expires_at) - Date.parse(rows.results[0]!.created_at);
-    expect(ttl).toBe(30 * 60_000);
+    expect(Math.abs(ttl - 30 * 60_000)).toBeLessThanOrEqual(1000); // two Date.now() reads can differ by a few milliseconds
   });
 
   it("an unknown email gets the identical 200 and nothing is sent", async () => {
