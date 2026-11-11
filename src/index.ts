@@ -10,6 +10,7 @@ import { invites } from "./routes/invites";
 import { contact } from "./routes/contact";
 import { registration } from "./routes/registration";
 import { members } from "./routes/members";
+import { live } from "./routes/live";
 
 const app = new Hono<AppBindings>();
 
@@ -51,6 +52,7 @@ app.route("/", invites);
 app.route("/", contact);
 app.route("/", registration);
 app.route("/", members);
+app.route("/", live);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((err, c) => {

@@ -57,6 +57,8 @@ const ROUTES: R[] = [
   { method: "GET", path: (c) => `/events/${c.ev}/members`, owner: true },
   { method: "POST", path: (c) => `/events/${c.ev}/members`, body: { email: "x@example.com", role: "viewer" }, owner: true },
   { method: "DELETE", path: (c) => `/events/${c.ev}/members/${c.uid}`, owner: true },
+  { method: "GET", path: (c) => `/events/${c.ev}/live` },
+  { method: "PUT", path: (c) => `/events/${c.ev}/live`, body: {} },
 ];
 
 // Account-level routes: need a user token, have no event.
@@ -87,6 +89,7 @@ const PUBLIC = new Set([
   "GET /public/registration/:token",
   "POST /public/registration/:token/submit",
   "POST /public/contact",
+  "GET /public/live/:slug",
 ]);
 
 async function world() {

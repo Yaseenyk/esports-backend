@@ -128,6 +128,7 @@ events.delete("/events/:id", async (c) => {
     db.prepare("DELETE FROM submissions WHERE event_id = ?").bind(e.id),
     db.prepare("DELETE FROM invites WHERE event_id = ?").bind(e.id),
     db.prepare("DELETE FROM share_links WHERE event_id = ?").bind(e.id),
+    db.prepare("DELETE FROM live_pages WHERE event_id = ?").bind(e.id),
     db.prepare("DELETE FROM checkins WHERE event_id = ?").bind(e.id),
     db.prepare("DELETE FROM gate_keys WHERE event_id = ?").bind(e.id),
     db.prepare("DELETE FROM photos WHERE event_id = ?").bind(e.id),
