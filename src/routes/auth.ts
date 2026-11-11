@@ -4,7 +4,7 @@ import { hashPassword, iterationsFrom, pwFingerprint, randomToken, sha256, signJ
 import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, str } from "../http";
 import { getMailer, resetLink, resetMail } from "../mailer";
 import { requireUser } from "../auth";
-import { handoverStatements, planOwnershipHandover } from "../ownership";
+import { afterUserDelete, handoverStatements, planOwnershipHandover } from "../ownership";
 
 export const auth = new Hono<AppBindings>();
 
@@ -127,7 +127,15 @@ auth.post("/auth/delete-account", requireUser, async (c) => {
       { code: "events_need_delete_confirmation", events: plan.needDeleteConfirmation.map((e) => ({ id: e.id, name: e.name })) },
     );
   }
-  await c.env.DB.batch([...handoverStatements(c.env.DB, u.id, plan.handovers), c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id)]);
+  try {
+    await c.env.DB.batch([...handoverStatements(c.env.DB, u.id, plan.handovers), c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id), ...afterUserDelete(c.env.DB, u.id)]);
+  } catch (e) {
+    // A foreign key still points at the account (for example a stray event): the batch rolled back whole, so nothing was deleted (review N-15).
+    if (/constraint|foreign key/i.test(e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? "")}` : String(e))) {
+      throw new HttpError(409, "Your account still owns something that could not be handed over, so nothing was deleted. Contact support if this keeps happening.", { code: "ownership_conflict" });
+    }
+    throw e;
+  }
   return c.json(plan.handovers.length ? { ok: true, handedOver: plan.handovers.map((h) => ({ id: h.id, name: h.name, newOwnerName: h.newOwnerName })) } : { ok: true });
 });
 

@@ -19,3 +19,19 @@ migrations_dir = "migrations"
 # Reminder emails: due reminders go out in small batches every 15 minutes (src/features/reminders-cron.ts).
 [triggers]
 crons = ["*/15 * * * *"]
+
+# Staging: a full separate copy (own Worker, own database, no cron, no mail key) for rehearsing migrations and cut-overs.
+# Deploy with: npx wrangler deploy --env staging ; migrate with: npx wrangler d1 migrations apply esports-db-staging --remote
+[env.staging]
+name = "esports-api-staging"
+
+[env.staging.vars]
+ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:4173"
+MAIL_FROM = "Esports Hub Staging <noreply@mail.streamerosai.com>"
+APP_URL = "http://localhost:3000"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "esports-db-staging"
+database_id = "2d843d9a-77a6-4212-8d80-bd0102216b9f"
+migrations_dir = "migrations"

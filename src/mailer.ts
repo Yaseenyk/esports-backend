@@ -76,3 +76,31 @@ export function unsubscribeLink(env: Pick<Env, "APP_URL">, token: string): strin
   const base = (env.APP_URL || DEFAULT_APP_URL).replace(/\/+$/, "");
   return `${base}/unsubscribe/?t=${token}`;
 }
+
+// ---------- daily mail pool (S6) ----------
+/** One pool of mail a day (free Resend plan). Reminders may use all but AUTH_RESERVE; auth mail (verify) may use the whole pool. */
+export const MAIL_DAY_LIMIT = 90;
+export const AUTH_RESERVE = 10;
+
+/** Atomically takes one email from today's pool. `kind` decides the ceiling: reminders stop 10 short so sign-in mail always gets through. */
+export async function reserveMail(env: Pick<Env, "DB">, day: string, kind: "auth" | "reminder"): Promise<boolean> {
+  const limit = kind === "auth" ? MAIL_DAY_LIMIT : MAIL_DAY_LIMIT - AUTH_RESERVE;
+  const r = await env.DB.prepare("INSERT INTO mail_budget (day, sent) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET sent = sent + 1 WHERE sent < ?2 RETURNING sent").bind(day, limit).first<{ sent: number }>();
+  return !!r;
+}
+
+export async function refundMail(env: Pick<Env, "DB">, day: string): Promise<void> {
+  await env.DB.prepare("UPDATE mail_budget SET sent = sent - 1 WHERE day = ? AND sent > 0").bind(day).run();
+}
+
+// ---------- email verification mail (S6) ----------
+export function verifyLink(env: Pick<Env, "APP_URL">, token: string): string {
+  const base = (env.APP_URL || DEFAULT_APP_URL).replace(/\/+$/, "");
+  return `${base}/verify-email/?t=${token}`;
+}
+
+export function verifyMail(to: string, link: string): Mail {
+  const text = `Confirm that this is your email address for Esports Hub.\n\nUse this link within 30 minutes:\n${link}\n\nIf you did not create an account, ignore this email. Cannot find it later? Check your spam folder.\n`;
+  const html = `<p>Confirm that this is your email address for Esports Hub.</p><p><a href="${link}">Confirm my email</a></p><p>The link is valid for 30 minutes.</p><p>If you did not create an account, ignore this email. Cannot find it later? Check your spam folder.</p>`;
+  return { to, subject: "Confirm your Esports Hub email", text, html };
+}

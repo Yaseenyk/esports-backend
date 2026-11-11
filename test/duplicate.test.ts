@@ -57,7 +57,7 @@ describe("duplicate: permissions", () => {
     const w = await world();
     const r = await dup(w.id, w.editor.token, { name: `Mine ${uniq()}`, include: { teams: true } });
     expect(r.status).toBe(201);
-    expect(Object.keys(r.json).sort()).toEqual(["createdAt", "date", "emergency", "game", "id", "key", "name", "organiser", "rules", "settings", "updatedAt", "venue"]);
+    expect(Object.keys(r.json).sort()).toEqual(["createdAt", "date", "emergency", "game", "id", "key", "name", "organiser", "rules", "settings", "startsOn", "updatedAt", "venue"]);
     expect((await q("SELECT owner_id FROM events WHERE id = ?", r.json.id))[0].owner_id).toBe(w.editor.id);
     expect((await dup(w.id, w.editor.token, { name: `M2 ${uniq()}`, include: { members: true } })).status).toBe(403);
     // the people of an event are its personal data: an editor cannot copy them into an account of their own (the owner can)

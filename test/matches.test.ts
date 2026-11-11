@@ -297,7 +297,7 @@ describe("public live page includes matches", () => {
     const none = await call(`/public/live/${slug}`);
     expect(none.status).toBe(200);
     expect(none.json.matches).toBeUndefined();
-    expect(Object.keys(none.json).sort()).toEqual(["event", "snapshot", "updatedAt"]);
+    expect(Object.keys(none.json).sort()).toEqual(["event", "pollMs", "snapshot", "updatedAt"]);
     await put(w.id, w.o.token, { matches: [{ id: "p1", stage: "group:A", round: 1, slot: 1, a: "Alpha", b: "Beta", startsAt: "2026-12-01T10:00:00Z", nextId: "p2", nextSide: "a" }, { id: "p2", stage: "knockout" }] });
     const a = await call(`/public/live/${slug}`);
     expect(a.json.matches.length).toBe(2);

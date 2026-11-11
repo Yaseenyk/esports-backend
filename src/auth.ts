@@ -12,8 +12,13 @@ export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
   if (!claims) throw new HttpError(401, "Authentication required");
   // A token outlives its account (7 days), so confirm the user still exists: a deleted account must not keep working or create orphan rows.
   // The same row carries the password fingerprint: a token issued before a password change no longer matches.
-  const u = await c.env.DB.prepare("SELECT pw_hash, pw_salt FROM users WHERE id = ?").bind(claims.sub).first<{ pw_hash: string; pw_salt: string }>();
+  const u = await c.env.DB.prepare("SELECT pw_hash, pw_salt, status FROM users WHERE id = ?").bind(claims.sub).first<{ pw_hash: string; pw_salt: string; status: string }>();
   if (!u || !timingSafeEqual(await pwFingerprint(u), claims.pv)) throw new HttpError(401, "Authentication required");
+  // Suspended or pending-deletion accounts get 401 everywhere; only GET /me answers 403 with a code so the app can explain.
+  if (u.status !== "active") {
+    if (c.req.method === "GET" && c.req.path === "/me") throw new HttpError(403, "This account is not active", { code: u.status === "suspended" ? "account_suspended" : "deletion_pending" });
+    throw new HttpError(401, "Authentication required");
+  }
   c.set("userId", claims.sub);
   await next();
 };

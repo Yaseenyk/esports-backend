@@ -12,7 +12,9 @@ import { registration } from "./routes/registration";
 import { members } from "./routes/members";
 import { live } from "./routes/live";
 import { scheduled } from "./features/reminders-cron";
+import { linksBackfillTick } from "./features/links-backfill";
 import { mountFeatures } from "./features";
+import { verify } from "./routes/verify";
 
 const app = new Hono<AppBindings>();
 
@@ -55,6 +57,7 @@ app.route("/", contact);
 app.route("/", registration);
 app.route("/", members);
 app.route("/", live);
+app.route("/", verify);
 mountFeatures(app);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
@@ -66,6 +69,11 @@ app.onError((err, c) => {
 });
 
 // The Workers runtime reads `scheduled` from the default export (the reminder sender runs on the cron trigger in wrangler.toml).
-Object.assign(app, { scheduled });
+Object.assign(app, {
+  scheduled: (c: ScheduledController, e: AppBindings["Bindings"], x: ExecutionContext) => {
+    scheduled(c, e, x);
+    x.waitUntil(linksBackfillTick(c.scheduledTime, e)); // S7 phase A: hash old clear tokens a few rows at a time
+  },
+});
 
 export default app;

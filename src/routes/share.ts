@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppBindings, EventRow } from "../types";
-import { importPassKey, passCode, passSig, randomToken } from "../crypto";
+import { importPassKey, passCode, passSig } from "../crypto";
+import { hashToken, newLink, revealToken, verifyPresented } from "../links";
 import { HttpError, nowIso } from "../http";
 import { blobBytes, imageResponse } from "../images";
 import { ownedEvent, requireUser } from "../auth";
@@ -12,10 +13,11 @@ share.post("/events/:id/people/:personId/share", requireUser, async (c) => {
   const pid = c.req.param("personId");
   const person = await c.env.DB.prepare("SELECT 1 FROM people WHERE event_id = ? AND id = ?").bind(ev.id, pid).first();
   if (!person) throw new HttpError(404, "Person not found");
-  const existing = await c.env.DB.prepare("SELECT token FROM share_links WHERE event_id = ? AND person_id = ? AND revoked = 0").bind(ev.id, pid).first<{ token: string }>();
-  if (existing) return c.json({ token: existing.token });
-  const token = randomToken();
-  await c.env.DB.prepare("INSERT INTO share_links (id, event_id, person_id, token, created_at, revoked) VALUES (?, ?, ?, ?, ?, 0)").bind(crypto.randomUUID(), ev.id, pid, token, nowIso()).run();
+  const existing = await c.env.DB.prepare("SELECT id, token, token_enc FROM share_links WHERE event_id = ? AND person_id = ? AND revoked = 0").bind(ev.id, pid).first<{ id: string; token: string; token_enc: string | null }>();
+  if (existing) return c.json({ token: await revealToken(c.env, "share", existing.id, existing) });
+  const id = crypto.randomUUID();
+  const { token, cols } = await newLink(c.env, "share", id);
+  await c.env.DB.prepare("INSERT INTO share_links (id, event_id, person_id, token, token_hash, token_enc, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, ?, 0)").bind(id, ev.id, pid, cols.token, cols.token_hash, cols.token_enc, nowIso()).run();
   return c.json({ token }, 201);
 });
 
@@ -27,14 +29,19 @@ share.delete("/events/:id/people/:personId/share", requireUser, async (c) => {
 
 interface PassRow {
   token: string;
+  token_hash: string | null;
   person_id: string;
   event_id: string;
 }
 
+// Phase A: the hashed column first (unique index), then a legacy row that has not been backfilled yet. A row with a hash never matches on its `token` column, which only holds a placeholder.
 async function linkFor(c: { env: AppBindings["Bindings"] }, token: string) {
   if (token.length > 64) throw new HttpError(404, "Not found");
-  const row = await c.env.DB.prepare("SELECT token, person_id, event_id FROM share_links WHERE token = ? AND revoked = 0").bind(token).first<PassRow>();
-  if (!row) throw new HttpError(404, "Not found");
+  const db = c.env.DB;
+  const row =
+    (await db.prepare("SELECT token, token_hash, person_id, event_id FROM share_links WHERE token_hash = ? AND revoked = 0").bind(await hashToken(token)).first<PassRow>()) ??
+    (await db.prepare("SELECT token, token_hash, person_id, event_id FROM share_links WHERE token = ? AND token_hash IS NULL AND revoked = 0").bind(token).first<PassRow>());
+  if (!row || !(await verifyPresented(token, row))) throw new HttpError(404, "Not found");
   return row;
 }
 
@@ -54,7 +61,7 @@ share.get("/public/pass/:token", async (c) => {
     event: { name: ev.name, date: ev.date, venue: ev.venue },
     person: { name: p.name, team: p.team, role: p.role, zones: JSON.parse(p.zones) as unknown },
     code: passCode(ev.slug, p.id, sig),
-    photoUrl: p.has_photo ? `/public/pass/${l.token}/photo` : null,
+    photoUrl: p.has_photo ? `/public/pass/${c.req.param("token")}/photo` : null,
   });
 });
 

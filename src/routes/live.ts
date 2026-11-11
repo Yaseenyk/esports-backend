@@ -14,6 +14,8 @@ const MAX_LOGO_CHARS = 60_000;
 const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 const SLUG_RE = /^[a-z2-7]{12}$/;
+export const POLL_LIVE_MS = 20_000;
+export const POLL_IDLE_MS = 120_000;
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 
 interface Sponsor { name: string; logo?: string }
@@ -148,7 +150,9 @@ live.get("/public/live/:slug", async (c) => {
   if (!row) throw new HttpError(404, "not_found");
   const matches = (await listMatches(c.env, row.event_id)).map(publicMatch);
   // `matches` is only present when the event has some, so pages without matches keep exactly the old body (and ETag). The ETag hashes the body, so it changes when a match does.
-  const body = JSON.stringify({ event: { name: row.name, date: row.date, venue: row.venue }, snapshot: parseSnapshot(row.snapshot), updatedAt: row.updated_at, ...(matches.length ? { matches } : {}) });
+  // pollMs is a hint for the page's refresh cadence (OD-D): 20 s while a match is live, 120 s otherwise. It is in the body, not a header, because browsers cannot read custom headers cross-origin.
+  const pollMs = matches.some((m) => m.status === "live") ? POLL_LIVE_MS : POLL_IDLE_MS;
+  const body = JSON.stringify({ event: { name: row.name, date: row.date, venue: row.venue }, snapshot: parseSnapshot(row.snapshot), updatedAt: row.updated_at, ...(matches.length ? { matches } : {}), pollMs });
   const etag = `"${(await sha256(body)).slice(0, 27)}"`;
   const headers = { "cache-control": "public, max-age=10", etag, "content-type": "application/json; charset=UTF-8" };
   const inm = c.req.header("if-none-match");

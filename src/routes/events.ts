@@ -23,6 +23,7 @@ export function publicEvent(e: EventRow) {
     game: e.game,
     organiser: e.organiser,
     date: e.date,
+    startsOn: e.starts_on ?? null,
     venue: e.venue,
     emergency: e.emergency,
     rules: e.rules,
@@ -30,6 +31,14 @@ export function publicEvent(e: EventRow) {
     createdAt: e.created_at,
     updatedAt: e.updated_at,
   };
+}
+
+/** Pure. The ISO day of a free-text event date: exactly YYYY-MM-DD and a real calendar day, otherwise null. */
+export function strictIsoDate(text: string | null | undefined): string | null {
+  const s = (text ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s ? s : null;
 }
 
 export function slugify(name: string): string {
@@ -67,7 +76,9 @@ function settingsJson(v: unknown): string {
 
 events.get("/events", async (c) => {
   const uid = c.get("userId");
-  const rows = await c.env.DB.prepare("SELECT e.*, CASE WHEN e.owner_id = ?1 THEN 'owner' ELSE m.role END AS my_role FROM events e LEFT JOIN event_members m ON m.event_id = e.id AND m.user_id = ?1 WHERE e.owner_id = ?1 OR m.user_id = ?1 ORDER BY e.created_at DESC LIMIT 200").bind(uid).all<EventRow & { my_role: string }>();
+  // The id set comes from two indexed branches that return bare ids, so UNION de-duplicates (a creator who is also a member appears once);
+  // the role comes from the outer joins, never from a per-branch literal.
+  const rows = await c.env.DB.prepare("SELECT e.*, CASE WHEN e.owner_id = ?1 THEN 'owner' ELSE m.role END AS my_role FROM events e LEFT JOIN event_members m ON m.event_id = e.id AND m.user_id = ?1 WHERE e.id IN (SELECT id FROM events WHERE owner_id = ?1 UNION SELECT event_id FROM event_members WHERE user_id = ?1) ORDER BY e.created_at DESC, e.id DESC LIMIT 200").bind(uid).all<EventRow & { my_role: string }>();
   return c.json(rows.results.map((r) => ({ ...publicEvent(r), role: r.my_role })));
 });
 
@@ -81,6 +92,7 @@ events.post("/events", async (c) => {
     game: optStr(b.game, "game", 80),
     organiser: optStr(b.organiser, "organiser", 120),
     date: optStr(b.date, "date", 40),
+    starts_on: null,
     venue: optStr(b.venue, "venue", 200),
     emergency: optStr(b.emergency, "emergency", 500),
     rules: optStr(b.rules, "rules", 10_000),
@@ -89,10 +101,11 @@ events.post("/events", async (c) => {
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+  row.starts_on = strictIsoDate(row.date);
   await c.env.DB.prepare(
-    "INSERT INTO events (id, owner_id, slug, name, game, organiser, date, venue, emergency, rules, settings, signing_secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO events (id, owner_id, slug, name, game, organiser, date, starts_on, venue, emergency, rules, settings, signing_secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(row.id, row.owner_id, row.slug, row.name, row.game, row.organiser, row.date, row.venue, row.emergency, row.rules, row.settings, row.signing_secret, row.created_at, row.updated_at)
+    .bind(row.id, row.owner_id, row.slug, row.name, row.game, row.organiser, row.date, row.starts_on, row.venue, row.emergency, row.rules, row.settings, row.signing_secret, row.created_at, row.updated_at)
     .run();
   return c.json(publicEvent(row), 201);
 });
@@ -114,10 +127,12 @@ events.put("/events/:id", async (c) => {
     settings: b.settings === undefined ? cur.settings : settingsJson(b.settings),
   };
   const updated = nowIso();
-  await c.env.DB.prepare("UPDATE events SET name = ?, game = ?, organiser = ?, date = ?, venue = ?, emergency = ?, rules = ?, settings = ?, updated_at = ? WHERE id = ? AND owner_id = ?")
-    .bind(next.name, next.game, next.organiser, next.date, next.venue, next.emergency, next.rules, next.settings, updated, cur.id, cur.owner_id)
+  // starts_on follows the date: recomputed only when the date text was sent; otherwise (e.g. a backfilled value) it is kept.
+  const startsOn = b.date === undefined ? (cur.starts_on ?? null) : strictIsoDate(next.date);
+  await c.env.DB.prepare("UPDATE events SET name = ?, game = ?, organiser = ?, date = ?, starts_on = ?, venue = ?, emergency = ?, rules = ?, settings = ?, updated_at = ? WHERE id = ? AND owner_id = ?")
+    .bind(next.name, next.game, next.organiser, next.date, startsOn, next.venue, next.emergency, next.rules, next.settings, updated, cur.id, cur.owner_id)
     .run();
-  return c.json(publicEvent({ ...cur, ...next, updated_at: updated }));
+  return c.json(publicEvent({ ...cur, ...next, starts_on: startsOn, updated_at: updated }));
 });
 
 events.delete("/events/:id", async (c) => {

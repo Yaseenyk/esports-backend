@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { revealToken } from "../links";
 import type { AppBindings } from "../types";
 import type { RouteRules } from "./types";
 import { HttpError, nowIso, rateLimit, rateLimitSoft, rateLimitSubject, readJson, type Ctx } from "../http";
@@ -58,10 +59,12 @@ const reportCount = async (c: Ctx, eventId: string) =>
   (await c.env.DB.prepare("SELECT COUNT(DISTINCT reporter) AS n FROM directory_reports WHERE event_id = ? AND resolved_at IS NULL").bind(eventId).first<{ n: number }>())?.n ?? 0;
 
 async function registrationLink(c: Ctx, eventId: string): Promise<string | null> {
-  const f = await c.env.DB.prepare("SELECT token FROM registration_forms WHERE event_id = ?").bind(eventId).first<{ token: string }>();
+  const f = await c.env.DB.prepare("SELECT token, token_enc FROM registration_forms WHERE event_id = ?").bind(eventId).first<{ token: string; token_enc: string | null }>();
   if (!f) return null;
+  const token = await revealToken(c.env, "regform", eventId, f);
+  if (!token) return null;
   const base = (c.env.APP_URL || DEFAULT_APP_URL).replace(/\/+$/, "");
-  return `${base}/register/?t=${encodeURIComponent(f.token)}`;
+  return `${base}/register/?t=${encodeURIComponent(token)}`;
 }
 
 routes.get("/events/:id/directory", requireUser, async (c) => {

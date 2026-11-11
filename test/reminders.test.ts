@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setMailerForTests, type Mail } from "../src/mailer";
-import { DAY_LIMIT, EVENT_DAY_LIMIT, buildReminderMail, dayOf, maskEmail, processDueJobs } from "../src/features/reminders";
+import { DAY_LIMIT, EVENT_DAY_LIMIT, REMINDER_DAY_LIMIT, syncRecipients, buildReminderMail, dayOf, maskEmail, processDueJobs } from "../src/features/reminders";
 import { call, newEvent, newUser, uniq } from "./helpers";
 
 vi.setConfig({ testTimeout: 120_000 });
@@ -86,7 +86,7 @@ describe("scheduling", () => {
     expect(made.json).toMatchObject({ status: "pending", recipientsSnapshotCount: 1, audience: "organiser" });
     const list = await jobs(s);
     expect(list.jobs).toHaveLength(1);
-    expect(list.limits).toMatchObject({ dayLimit: DAY_LIMIT, eventDayLimit: EVENT_DAY_LIMIT });
+    expect(list.limits).toMatchObject({ dayLimit: REMINDER_DAY_LIMIT, eventDayLimit: EVENT_DAY_LIMIT });
     expect((await call(`/events/${s.ev.id}/reminders/${made.json.id}`, { method: "DELETE", token: s.u.token })).status).toBe(200);
     expect((await call(`/events/${s.ev.id}/reminders/${made.json.id}`, { method: "DELETE", token: s.u.token })).status).toBe(200);
     expect((await call(`/events/${s.ev.id}/reminders/nope`, { method: "DELETE", token: s.u.token })).status).toBe(404);
@@ -159,13 +159,13 @@ describe("sending", () => {
     const s = await setup();
     for (let i = 0; i < 3; i++) await addCaptain(s.token, `Team ${i}`, `d${i}-${uniq()}@example.com`);
     await schedule(s);
-    await env.DB.prepare("INSERT INTO mail_budget (day, sent) VALUES (?, ?) ON CONFLICT (day) DO UPDATE SET sent = excluded.sent").bind(dayOf(), DAY_LIMIT - 2).run();
+    await env.DB.prepare("INSERT INTO mail_budget (day, sent) VALUES (?, ?) ON CONFLICT (day) DO UPDATE SET sent = excluded.sent").bind(dayOf(), REMINDER_DAY_LIMIT - 2).run();
     await processDueJobs(env, { eventId: s.ev.id });
     expect(sent).toHaveLength(2);
     const j = await jobs(s);
     expect(j.jobs[0].status).toBe("sending");
     expect(j.jobs[0].note).toContain("daily email limit");
-    expect(j.limits.sentToday).toBe(DAY_LIMIT);
+    expect(j.limits.sentToday).toBe(REMINDER_DAY_LIMIT);
     expect(j.limits.remainingToday).toBe(0);
     await processDueJobs(env, { eventId: s.ev.id });
     expect(sent).toHaveLength(2); // nothing more today
@@ -246,6 +246,45 @@ describe("unsubscribe", () => {
     await processDueJobs(env, { eventId: s.ev.id });
     const t = unsubToken(sent[0]!);
     expect(JSON.stringify((await env.DB.prepare("SELECT * FROM reminder_recipients").all()).results)).not.toContain(t);
+  });
+});
+
+describe("mail pool reserve and key split (S6, S10)", () => {
+  it("reminders stop 10 short of the daily pool", () => {
+    expect(DAY_LIMIT).toBe(90);
+    expect(REMINDER_DAY_LIMIT).toBe(80);
+  });
+
+  it("rotating JWT_SECRET: a link mailed before the split still opens, and the next mail to that person carries a working one", async () => {
+    const s = await setup();
+    await addCaptain(s.token, "Kings", "kings@example.com");
+    await syncRecipients(env, s.ev.id); // stored hash comes from the JWT_SECRET-keyed token (before the split)
+    await schedule(s);
+    await processDueJobs(env, { eventId: s.ev.id });
+    const old = unsubToken(sent.find((m) => m.to === "kings@example.com")!);
+    const rotated = { ...env, JWT_SECRET: "rotated-secret-rotated-secret-rotated", HASH_KEY: "hash-key-one-hash-key-one-hash-key-one" };
+    // Lookup is by stored hash, so the 30-day-old link opens whatever the secrets are now.
+    expect((await call(`/public/unsubscribe/${old}`)).status).toBe(200);
+    sent = [];
+    await schedule(s);
+    await processDueJobs(rotated, { eventId: s.ev.id });
+    const fresh = unsubToken(sent.find((m) => m.to === "kings@example.com")!);
+    expect((await call(`/public/unsubscribe/${fresh}`)).status).toBe(200);
+  });
+
+  it("a recipient created under HASH_KEY keeps its link when JWT_SECRET changes", async () => {
+    const s = await setup();
+    await addCaptain(s.token, "Rooks", "rooks@example.com");
+    const e1 = { ...env, HASH_KEY: "hash-key-two-hash-key-two-hash-key-two" };
+    await syncRecipients(e1, s.ev.id);
+    await schedule(s);
+    await processDueJobs(e1, { eventId: s.ev.id });
+    const link = unsubToken(sent.find((m) => m.to === "rooks@example.com")!);
+    expect((await call(`/public/unsubscribe/${link}`)).status).toBe(200);
+    sent = [];
+    await schedule(s);
+    await processDueJobs({ ...e1, JWT_SECRET: "another-secret-another-secret-another" }, { eventId: s.ev.id });
+    expect(unsubToken(sent.find((m) => m.to === "rooks@example.com")!)).toBe(link);
   });
 });
 

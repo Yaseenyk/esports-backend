@@ -12,6 +12,7 @@ export default defineConfig(async () => {
           bindings: {
             JWT_SECRET: "test-secret-test-secret-test-secret",
             PBKDF2_ITERATIONS: "1000",
+            LINK_KEY: "test-link-key-test-link-key-test-link-key",
             TEST_MIGRATIONS: migrations,
           },
         },

@@ -6,6 +6,8 @@ export interface Env {
   RESEND_API_KEY?: string; // secret: wrangler secret put RESEND_API_KEY
   MAIL_FROM?: string;
   APP_URL?: string;
+  LINK_KEY?: string; // secret: wrangler secret put LINK_KEY (S7: encrypts the re-displayable copy of share, invite and registration tokens)
+  HASH_KEY?: string; // secret: keys unsubscribe tokens (S10); falls back to JWT_SECRET until set
 }
 
 export type AppBindings = {
@@ -25,6 +27,7 @@ export interface EventRow {
   emergency: string;
   rules: string;
   settings: string;
+  starts_on?: string | null;
   signing_secret: string;
   created_at: string;
   updated_at: string;

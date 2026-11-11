@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import type { RouteRules } from "./types";
 import { randomToken } from "../crypto";
+import { newLink } from "../links";
 import { HttpError, nowIso, optStr, rateLimitSubject, readJson, str } from "../http";
 import { accessibleEvent, requireUser } from "../auth";
-import { publicEvent, slugify } from "../routes/events";
+import { publicEvent, slugify, strictIsoDate } from "../routes/events";
 import { listMatches, MAX_MATCHES } from "../matches";
 
 /**
@@ -86,8 +87,8 @@ routes.post("/events/:id/duplicate", requireUser, async (c) => {
   const newId = crypto.randomUUID();
   const stmts: D1PreparedStatement[] = [];
   stmts.push(
-    db.prepare("INSERT INTO events (id, owner_id, slug, name, game, organiser, date, venue, emergency, rules, settings, signing_secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(newId, uid, await uniqueSlug(db, uid, name), name, src.game, src.organiser, date, src.venue, src.emergency, src.rules, src.settings, randomToken(32), now, now),
+    db.prepare("INSERT INTO events (id, owner_id, slug, name, game, organiser, date, starts_on, venue, emergency, rules, settings, signing_secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(newId, uid, await uniqueSlug(db, uid, name), name, src.game, src.organiser, date, strictIsoDate(date), src.venue, src.emergency, src.rules, src.settings, randomToken(32), now, now),
   );
 
   if (inc.teams) {
@@ -99,9 +100,10 @@ routes.post("/events/:id/duplicate", requireUser, async (c) => {
   }
   if (inc.registrationForm) {
     // Text and settings only. New token, starts closed, no deadline carried over, no submissions.
+    const link = await newLink(c.env, "regform", newId);
     stmts.push(
-      db.prepare("INSERT INTO registration_forms (event_id, token, title, intro, closes_at, max_teams, team_size, subs, open, created_at) SELECT ?, ?, title, intro, NULL, max_teams, team_size, subs, 0, ? FROM registration_forms WHERE event_id = ?")
-        .bind(newId, randomToken(), now, src.id),
+      db.prepare("INSERT INTO registration_forms (event_id, token, token_hash, token_enc, title, intro, closes_at, max_teams, team_size, subs, open, created_at) SELECT ?, ?, ?, ?, title, intro, NULL, max_teams, team_size, subs, 0, ? FROM registration_forms WHERE event_id = ?")
+        .bind(newId, link.cols.token, link.cols.token_hash, link.cols.token_enc, now, src.id),
     );
   }
   if (inc.liveExtras) {

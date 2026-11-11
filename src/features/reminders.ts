@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import type { AppBindings, Env } from "../types";
 import { HttpError, nowIso, optStr, rateLimit, readJson, str } from "../http";
 import { ownedEvent, requireUser } from "../auth";
-import { b64url, sha256 } from "../crypto";
-import { mailerConfigured, sendMailWithHeaders, unsubscribeLink, type MailWithHeaders } from "../mailer";
+import { deriveToken, hashKey, sha256 } from "../crypto";
+import { AUTH_RESERVE, MAIL_DAY_LIMIT, mailerConfigured, refundMail, reserveMail, sendMailWithHeaders, unsubscribeLink, type MailWithHeaders } from "../mailer";
 import type { RouteRules } from "./types";
 
 /**
@@ -13,7 +13,8 @@ import type { RouteRules } from "./types";
  */
 export const routes = new Hono<AppBindings>();
 
-export const DAY_LIMIT = 90; // leaves room for password-reset emails under the 100 a day free plan
+export const DAY_LIMIT = MAIL_DAY_LIMIT; // one pool of 90 a day under the 100 a day free plan
+export const REMINDER_DAY_LIMIT = DAY_LIMIT - AUTH_RESERVE; // 10 are kept for auth mail (email verification), so reminders stop at 80
 export const EVENT_DAY_LIMIT = 40;
 export const BATCH = 8; // emails per cron run: a Worker has a small subrequest allowance
 const MAX_OPEN_JOBS = 20;
@@ -56,10 +57,21 @@ export function buildReminderMail(subject: string, body: string, eventName: stri
   return { subject: cleanSubject, text, html };
 }
 
-async function tokenFor(env: Env, recipientId: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.JWT_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`unsub1|${recipientId}`));
-  return b64url(mac).slice(0, 32);
+/** The unsubscribe token for a recipient, keyed with HASH_KEY (S10), so rotating JWT_SECRET never touches it. */
+const tokenFor = (env: Env, recipientId: string): Promise<string> => deriveToken(hashKey(env), "unsub1", recipientId);
+
+/**
+ * The token to put in a link for a recipient. Only its hash is stored, so the link must reproduce the stored hash:
+ * try the current key, then the pre-S10 key (JWT_SECRET), so mails sent before the split and after a rotation still match.
+ * Only when neither matches (a key changed with no fallback) is the stored hash replaced, so the recipient still gets a working link.
+ */
+async function linkTokenFor(env: Env, recipientId: string, storedHash: string): Promise<string> {
+  const current = await tokenFor(env, recipientId);
+  if ((await sha256(current)) === storedHash) return current;
+  const legacy = await deriveToken(env.JWT_SECRET, "unsub1", recipientId);
+  if ((await sha256(legacy)) === storedHash) return legacy;
+  await env.DB.prepare("UPDATE reminder_recipients SET token_hash = ? WHERE id = ?").bind(await sha256(current), recipientId).run();
+  return current;
 }
 
 const audienceKinds = (a: Audience): [string, string] => (a === "organiser" ? ["organiser", "organiser"] : a === "captain" ? ["captain", "captain"] : ["organiser", "captain"]);
@@ -99,19 +111,16 @@ async function sentToday(env: Env, day: string): Promise<number> {
 async function eventSentToday(env: Env, eventId: string, day: string): Promise<number> {
   return (await env.DB.prepare("SELECT COUNT(*) AS n FROM reminder_deliveries WHERE event_id = ? AND day = ? AND status IN ('sending', 'sent')").bind(eventId, day).first<{ n: number }>())?.n ?? 0;
 }
-/** Atomically takes one email from today's global budget. False when the day is used up. */
+/** Atomically takes one email from today's pool (reminders may use all but the 10 kept for auth mail). False when the day is used up. */
 export async function reserveBudget(env: Env, day: string): Promise<boolean> {
-  const r = await env.DB.prepare("INSERT INTO mail_budget (day, sent) VALUES (?1, 1) ON CONFLICT (day) DO UPDATE SET sent = sent + 1 WHERE sent < ?2 RETURNING sent").bind(day, DAY_LIMIT).first<{ sent: number }>();
-  return !!r;
+  return reserveMail(env, day, "reminder");
 }
-async function refundBudget(env: Env, day: string): Promise<void> {
-  await env.DB.prepare("UPDATE mail_budget SET sent = sent - 1 WHERE day = ? AND sent > 0").bind(day).run();
-}
+const refundBudget = refundMail;
 
 async function limits(env: Env, eventId: string) {
   const day = dayOf();
   const [s, e] = await Promise.all([sentToday(env, day), eventSentToday(env, eventId, day)]);
-  return { dayLimit: DAY_LIMIT, eventDayLimit: EVENT_DAY_LIMIT, sentToday: s, eventSentToday: e, remainingToday: Math.max(0, Math.min(DAY_LIMIT - s, EVENT_DAY_LIMIT - e)) };
+  return { dayLimit: REMINDER_DAY_LIMIT, eventDayLimit: EVENT_DAY_LIMIT, sentToday: s, eventSentToday: e, remainingToday: Math.max(0, Math.min(REMINDER_DAY_LIMIT - s, EVENT_DAY_LIMIT - e)) };
 }
 
 // ---------- sending ----------
@@ -120,8 +129,8 @@ interface JobRow { id: string; event_id: string; kind: string; subject: string; 
 async function deliverBatch(env: Env, job: JobRow, eventName: string, max: number): Promise<{ attempted: number; paused: "" | "day" | "event" }> {
   const db = env.DB;
   const [a, b] = audienceKinds(job.audience);
-  const rows = await db.prepare("SELECT r.id AS id, r.email AS email FROM reminder_recipients r WHERE r.event_id = ?1 AND r.unsubscribed_at IS NULL AND r.consent_at IS NOT NULL AND (r.kind = ?2 OR r.kind = ?3) AND NOT EXISTS (SELECT 1 FROM reminder_deliveries d WHERE d.job_id = ?4 AND d.recipient_id = r.id) ORDER BY r.id LIMIT ?5")
-    .bind(job.event_id, a, b, job.id, max).all<{ id: string; email: string }>();
+  const rows = await db.prepare("SELECT r.id AS id, r.email AS email, r.token_hash AS token_hash FROM reminder_recipients r WHERE r.event_id = ?1 AND r.unsubscribed_at IS NULL AND r.consent_at IS NOT NULL AND (r.kind = ?2 OR r.kind = ?3) AND NOT EXISTS (SELECT 1 FROM reminder_deliveries d WHERE d.job_id = ?4 AND d.recipient_id = r.id) ORDER BY r.id LIMIT ?5")
+    .bind(job.event_id, a, b, job.id, max).all<{ id: string; email: string; token_hash: string }>();
   let attempted = 0;
   const day = dayOf();
   let usedByEvent = await eventSentToday(env, job.event_id, day);
@@ -132,7 +141,7 @@ async function deliverBatch(env: Env, job: JobRow, eventName: string, max: numbe
     const claim = await db.prepare("INSERT OR IGNORE INTO reminder_deliveries (job_id, recipient_id, event_id, day, status) VALUES (?, ?, ?, ?, 'sending')").bind(job.id, r.id, job.event_id, day).run();
     if (claim.meta.changes !== 1) { await refundBudget(env, day); continue; }
     usedByEvent++; attempted++;
-    const link = unsubscribeLink(env, await tokenFor(env, r.id));
+    const link = unsubscribeLink(env, await linkTokenFor(env, r.id, r.token_hash));
     const msg: MailWithHeaders = { to: r.email, ...buildReminderMail(job.subject, job.body, eventName, link), headers: { "List-Unsubscribe": `<${link}>` } };
     try {
       if (!(await sendMailWithHeaders(env, msg))) throw new Error("no mailer");
@@ -237,13 +246,13 @@ routes.post("/events/:id/reminders/test", requireUser, async (c) => {
   const u = await c.env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(c.get("userId")).first<{ email: string }>();
   if (!u) throw new HttpError(404, "Not found");
   await syncRecipients(c.env, ev.id);
-  const rec = await c.env.DB.prepare("SELECT id FROM reminder_recipients WHERE event_id = ? AND email = ? AND kind = 'organiser'").bind(ev.id, u.email.toLowerCase()).first<{ id: string }>();
+  const rec = await c.env.DB.prepare("SELECT id, token_hash FROM reminder_recipients WHERE event_id = ? AND email = ? AND kind = 'organiser'").bind(ev.id, u.email.toLowerCase()).first<{ id: string; token_hash: string }>();
   if (!rec) throw new HttpError(404, "Not found");
   const day = dayOf();
-  if (!(await reserveBudget(c.env, day))) throw new HttpError(409, `The daily limit of ${DAY_LIMIT} emails has been reached. Try again after midnight UTC`);
+  if (!(await reserveBudget(c.env, day))) throw new HttpError(409, `The daily limit of ${REMINDER_DAY_LIMIT} reminder emails has been reached. Try again after midnight UTC`);
   const subject = typeof b.subject === "string" && b.subject.trim() ? b.subject.replace(/[\r\n]+/g, " ").trim().slice(0, 120) : `Reminder for ${ev.name}`;
   const body = typeof b.body === "string" && b.body.trim() && !LINK_RE.test(b.body) ? b.body.slice(0, 2000) : "This is a test of the email reminders for your event. Nothing was sent to anyone else.";
-  const link = unsubscribeLink(c.env, await tokenFor(c.env, rec.id));
+  const link = unsubscribeLink(c.env, await linkTokenFor(c.env, rec.id, rec.token_hash));
   const mail = buildReminderMail(`[Test] ${subject}`, body, ev.name, link);
   try {
     await sendMailWithHeaders(c.env, { to: u.email, ...mail, headers: { "List-Unsubscribe": `<${link}>` } });

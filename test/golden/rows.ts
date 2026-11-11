@@ -53,6 +53,8 @@ export const ROUTES: R[] = [...CORE_ROUTES, ...FEATURES.flatMap((f) => f.rows)];
 // Account-level routes: need a user token, have no event.
 export const ACCOUNT: { method: string; path: string; body?: unknown }[] = [
   { method: "GET", path: "/me" },
+  { method: "POST", path: "/me/email/verify/start" },
+  { method: "POST", path: "/me/email/verify", body: { token: "x" } },
   { method: "POST", path: "/auth/change-password", body: { current: "x", next: "yyyyyyyy" } },
   { method: "POST", path: "/auth/delete-account", body: { password: "x" } },
   // brand kit and team profiles belong to the signed-in user, not to an event

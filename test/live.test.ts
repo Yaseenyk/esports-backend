@@ -203,7 +203,7 @@ describe("live page, public side", () => {
     const secret = (await env.DB.prepare("SELECT signing_secret FROM events WHERE id = ?").bind(o.ev.id).first<{ signing_secret: string }>())!.signing_secret;
     const slug = (await put(o.ev.id, o.token, { published: true, snapshot: snap() })).json.slug as string;
     const r = await call(`/public/live/${slug}`);
-    expect(Object.keys(r.json).sort()).toEqual(["event", "snapshot", "updatedAt"]);
+    expect(Object.keys(r.json).sort()).toEqual(["event", "pollMs", "snapshot", "updatedAt"]);
     expect(Object.keys(r.json.event).sort()).toEqual(["date", "name", "venue"]);
     for (const secretText of ["Asha", "Ravi", "Mira", "Alpha Wolves", "ALP-001", "EH1.", key.key, form.token, secret, o.id, o.email, "owner", "Be nice", o.ev.id, o.ev.key]) {
       expect(r.text, secretText).not.toContain(secretText);
@@ -240,5 +240,18 @@ describe("live page, rate limits", () => {
     expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(404); // 240th
     expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip })).status).toBe(429); // 241st
     expect((await callDirect("/public/live/aaaaaaaaaaaa", { ip: freshIp() })).status).toBe(404);
+  });
+});
+
+describe("public live pollMs hint (S2b, OD-D)", () => {
+  it("is 120000 with no live match and 20000 while a match is live, in the body", async () => {
+    const o = await setupEvent("Poll Cup");
+    const p = await put(o.ev.id, o.token, { published: true, snapshot: snap() });
+    const slug = p.json.slug as string;
+    const a = await call(`/public/live/${slug}`);
+    expect(a.json.pollMs).toBe(120_000);
+    expect(a.headers.get("x-poll-ms")).toBeNull();
+    await call(`/events/${o.ev.id}/matches`, { method: "PUT", token: o.token, body: { matches: [{ stage: "main", round: 1, slot: 1, a: "Alpha Wolves", b: "Beta Hawks", status: "live" }] } });
+    expect((await call(`/public/live/${slug}`)).json.pollMs).toBe(20_000);
   });
 });

@@ -108,3 +108,13 @@ export async function passSig(key: CryptoKey, eventKey: string, personId: string
 }
 
 export const passCode = (eventKey: string, personId: string, sig: string) => `EH1.${eventKey}.${personId}.${sig}`;
+
+// ---------- purpose-split keys (S10) ----------
+/** Key for hashes and derived tokens that are not sessions (unsubscribe tokens, rate-limit and reporter hashes). Falls back to JWT_SECRET until HASH_KEY is set. */
+export const hashKey = (env: { HASH_KEY?: string; JWT_SECRET: string }): string => env.HASH_KEY || env.JWT_SECRET;
+
+/** 32-char token derived from a secret, a purpose label and an id: HMAC-SHA256, base64url, truncated. */
+export async function deriveToken(secret: string, label: string, id: string): Promise<string> {
+  const mac = await crypto.subtle.sign("HMAC", await hmacKey(secret, ["sign"]), enc.encode(`${label}|${id}`));
+  return b64url(mac).slice(0, 32);
+}

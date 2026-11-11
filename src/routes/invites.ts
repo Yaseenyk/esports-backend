@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
-import { randomToken } from "../crypto";
+import { hashToken, newLink, revealToken, verifyPresented } from "../links";
 import { HttpError, idStr, inHours, nowIso, optBool, optHours, optStr, rateLimit, readJson, str } from "../http";
 import { blobBytes, imageResponse, parsePhotoDataUrl } from "../images";
 import { ownedEvent, requireUser } from "../auth";
@@ -24,9 +24,9 @@ invites.post("/events/:id/invites", requireUser, async (c) => {
   }
   const expiresAt = inHours(optHours(b.expiresInHours, "expiresInHours"));
   const id = crypto.randomUUID();
-  const token = randomToken();
-  await c.env.DB.prepare("INSERT INTO invites (id, event_id, team_id, token, label, max_uses, uses, expires_at, revoked, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?)")
-    .bind(id, ev.id, teamId, token, label, maxUses, expiresAt, nowIso())
+  const { token, cols } = await newLink(c.env, "invite", id);
+  await c.env.DB.prepare("INSERT INTO invites (id, event_id, team_id, token, token_hash, token_enc, label, max_uses, uses, expires_at, revoked, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)")
+    .bind(id, ev.id, teamId, cols.token, cols.token_hash, cols.token_enc, label, maxUses, expiresAt, nowIso())
     .run();
   return c.json({ id, token, teamId, label, maxUses, expiresAt }, 201);
 });
@@ -34,10 +34,11 @@ invites.post("/events/:id/invites", requireUser, async (c) => {
 invites.get("/events/:id/invites", requireUser, async (c) => {
   const ev = await ownedEvent(c, c.req.param("id"));
   const hide = ev.my_role === "viewer"; // the token is a credential that lets its holder submit people: view-only members get it blank
-  const rows = await c.env.DB.prepare("SELECT id, team_id, token, label, max_uses, uses, expires_at, revoked, created_at FROM invites WHERE event_id = ? ORDER BY created_at DESC LIMIT 500")
+  const rows = await c.env.DB.prepare("SELECT id, team_id, token, token_enc, label, max_uses, uses, expires_at, revoked, created_at FROM invites WHERE event_id = ? ORDER BY created_at DESC LIMIT 500")
     .bind(ev.id)
-    .all<{ id: string; team_id: string; token: string; label: string; max_uses: number | null; uses: number; expires_at: string | null; revoked: number; created_at: string }>();
-  return c.json(rows.results.map((r) => ({ id: r.id, teamId: r.team_id, token: hide ? "" : r.token, label: r.label, maxUses: r.max_uses, uses: r.uses, expiresAt: r.expires_at, revoked: !!r.revoked, createdAt: r.created_at })));
+    .all<{ id: string; team_id: string; token: string; token_enc: string | null; label: string; max_uses: number | null; uses: number; expires_at: string | null; revoked: number; created_at: string }>();
+  const out = await Promise.all(rows.results.map(async (r) => ({ id: r.id, teamId: r.team_id, token: hide ? "" : await revealToken(c.env, "invite", r.id, r), label: r.label, maxUses: r.max_uses, uses: r.uses, expiresAt: r.expires_at, revoked: !!r.revoked, createdAt: r.created_at })));
+  return c.json(out);
 });
 
 invites.delete("/events/:id/invites/:inviteId", requireUser, async (c) => {
@@ -157,12 +158,23 @@ interface InviteRow {
 
 async function usableInvite(c: { env: AppBindings["Bindings"] }, token: string): Promise<InviteRow> {
   if (token.length > 64) throw new HttpError(404, "Invite not found");
-  const row = await c.env.DB.prepare(
-    "SELECT i.id, i.event_id, i.team_id, e.name AS event_name, e.date AS event_date, t.name AS team_name FROM invites i JOIN events e ON e.id = i.event_id JOIN teams t ON t.event_id = i.event_id AND t.id = i.team_id WHERE i.token = ? AND i.revoked = 0 AND (i.expires_at IS NULL OR i.expires_at > ?) AND (i.max_uses IS NULL OR i.uses < i.max_uses)",
-  )
-    .bind(token, nowIso())
-    .first<InviteRow>();
-  if (!row) throw new HttpError(404, "Invite not found");
+  const db = c.env.DB;
+  const now = nowIso();
+  // Phase A: hashed column first (unique index), then a legacy row not backfilled yet (token_hash IS NULL, so the placeholder in `token` can never be used as a credential).
+  const row =
+    (await db
+      .prepare(
+        "SELECT i.id, i.event_id, i.team_id, i.token, i.token_hash, e.name AS event_name, e.date AS event_date, t.name AS team_name FROM invites i JOIN events e ON e.id = i.event_id JOIN teams t ON t.event_id = i.event_id AND t.id = i.team_id WHERE i.token_hash = ? AND i.revoked = 0 AND (i.expires_at IS NULL OR i.expires_at > ?) AND (i.max_uses IS NULL OR i.uses < i.max_uses)",
+      )
+      .bind(await hashToken(token), now)
+      .first<InviteRow & { token: string; token_hash: string | null }>()) ??
+    (await db
+      .prepare(
+        "SELECT i.id, i.event_id, i.team_id, i.token, i.token_hash, e.name AS event_name, e.date AS event_date, t.name AS team_name FROM invites i JOIN events e ON e.id = i.event_id JOIN teams t ON t.event_id = i.event_id AND t.id = i.team_id WHERE i.token = ? AND i.token_hash IS NULL AND i.revoked = 0 AND (i.expires_at IS NULL OR i.expires_at > ?) AND (i.max_uses IS NULL OR i.uses < i.max_uses)",
+      )
+      .bind(token, now)
+      .first<InviteRow & { token: string; token_hash: string | null }>());
+  if (!row || !(await verifyPresented(token, row))) throw new HttpError(404, "Invite not found");
   return row;
 }
 
