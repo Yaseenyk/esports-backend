@@ -88,13 +88,14 @@ describe("auth", () => {
     expect((await call("/me", { token: none })).status).toBe(401);
     expect((await call("/me", { token: await forgeJwt({ sub: u.id, exp: 9999999999 }, "some-other-secret-value") })).status).toBe(401);
     expect((await call("/me", { token: await forgeJwt({ sub: u.id, exp: 1000 }, env.JWT_SECRET) })).status).toBe(401);
-    expect((await call("/me", { token: await forgeJwt({ sub: u.id, exp: Math.floor(Date.now() / 1000) + 60 }, env.JWT_SECRET) })).status).toBe(200);
+    const pv = JSON.parse(atob(u.token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))).pv;
+    expect((await call("/me", { token: await forgeJwt({ sub: u.id, exp: Math.floor(Date.now() / 1000) + 60, pv }, env.JWT_SECRET) })).status).toBe(200);
   });
 
   it("issues tokens that expire in 7 days with claims {sub, exp}", async () => {
     const u = await newUser();
     const claims = JSON.parse(atob(u.token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")));
-    expect(Object.keys(claims).sort()).toEqual(["exp", "sub"]);
+    expect(Object.keys(claims).sort()).toEqual(["exp", "pv", "sub"]);
     expect(claims.sub).toBe(u.id);
     const left = claims.exp - Math.floor(Date.now() / 1000);
     expect(left).toBeGreaterThan(7 * 86400 - 60);

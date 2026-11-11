@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
-import { hashPassword, iterationsFrom, signJwt, verifyPassword } from "../crypto";
+import { hashPassword, iterationsFrom, pwFingerprint, signJwt, verifyPassword } from "../crypto";
 import { HttpError, nowIso, rateLimit, readJson, str } from "../http";
 import { requireUser } from "../auth";
 
@@ -55,7 +55,7 @@ auth.post("/auth/register", async (c) => {
   } catch {
     throw new HttpError(409, "An account with this email already exists");
   }
-  return c.json({ token: await signJwt(user.id, c.env.JWT_SECRET), user: publicUser(user) }, 201);
+  return c.json({ token: await signJwt(user.id, c.env.JWT_SECRET, await pwFingerprint(user)), user: publicUser(user) }, 201);
 });
 
 auth.post("/auth/login", async (c) => {
@@ -69,7 +69,7 @@ auth.post("/auth/login", async (c) => {
     ? await verifyPassword(pw, u.pw_hash, u.pw_salt, u.pw_iter)
     : (await verifyPassword(pw, DUMMY.hash, DUMMY.salt, iterationsFrom(c.env)), false);
   if (!u || !ok) throw new HttpError(401, "Wrong email or password");
-  return c.json({ token: await signJwt(u.id, c.env.JWT_SECRET), user: publicUser(u) });
+  return c.json({ token: await signJwt(u.id, c.env.JWT_SECRET, await pwFingerprint(u)), user: publicUser(u) });
 });
 
 auth.get("/me", requireUser, async (c) => {
@@ -88,7 +88,8 @@ auth.post("/auth/change-password", requireUser, async (c) => {
   if (!u || !(await verifyPassword(current, u.pw_hash, u.pw_salt, u.pw_iter))) throw new HttpError(401, "Current password is wrong");
   const h = await hashPassword(next, iterationsFrom(c.env));
   await c.env.DB.prepare("UPDATE users SET pw_hash = ?, pw_salt = ?, pw_iter = ? WHERE id = ?").bind(h.hash, h.salt, h.iterations, u.id).run();
-  return c.json({ ok: true });
+  // Every older token stops working (its fingerprint no longer matches); hand back a fresh one so this session continues.
+  return c.json({ ok: true, token: await signJwt(u.id, c.env.JWT_SECRET, await pwFingerprint({ pw_hash: h.hash, pw_salt: h.salt })) });
 });
 
 /** Delete the account and everything under it (events, rosters, photos, check-ins, links). Needs the password. */

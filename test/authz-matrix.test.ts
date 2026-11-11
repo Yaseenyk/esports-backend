@@ -333,7 +333,8 @@ describe("JWT validation", () => {
 
   it("accepts a correctly signed token and rejects every variant that is not", async () => {
     const u = await newUser();
-    expect((await call("/me", { token: await sign(H, { sub: u.id, exp: future() }) })).status).toBe(200);
+    const pv = JSON.parse(atob(u.token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"))).pv;
+    expect((await call("/me", { token: await sign(H, { sub: u.id, exp: future(), pv }) })).status).toBe(200);
     const bad: Record<string, string> = {
       expired: await sign(H, { sub: u.id, exp: Math.floor(Date.now() / 1000) - 10 }),
       expiresNow: await sign(H, { sub: u.id, exp: Math.floor(Date.now() / 1000) }),

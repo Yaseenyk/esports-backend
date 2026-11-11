@@ -66,14 +66,19 @@ export async function verifyPassword(password: string, hash: string, salt: strin
 const JWT_HEADER = b64url(enc.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
 export const JWT_TTL_SECONDS = 7 * 24 * 3600;
 
-export async function signJwt(sub: string, secret: string): Promise<string> {
+/** Short non-reversible fingerprint of the current password hash+salt; changes whenever the password changes. */
+export async function pwFingerprint(u: { pw_hash: string; pw_salt: string }): Promise<string> {
+  return (await sha256(`pv1|${u.pw_salt}|${u.pw_hash}`)).slice(0, 16);
+}
+
+export async function signJwt(sub: string, secret: string, pv: string): Promise<string> {
   const exp = Math.floor(Date.now() / 1000) + JWT_TTL_SECONDS;
-  const data = `${JWT_HEADER}.${b64url(enc.encode(JSON.stringify({ sub, exp })))}`;
+  const data = `${JWT_HEADER}.${b64url(enc.encode(JSON.stringify({ sub, exp, pv })))}`;
   const sig = await crypto.subtle.sign("HMAC", await hmacKey(secret, ["sign"]), enc.encode(data));
   return `${data}.${b64url(sig)}`;
 }
 
-export async function verifyJwt(token: string, secret: string): Promise<string | null> {
+export async function verifyJwt(token: string, secret: string): Promise<{ sub: string; pv: string } | null> {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [h, p, s] = parts as [string, string, string];
@@ -82,10 +87,11 @@ export async function verifyJwt(token: string, secret: string): Promise<string |
     // subtle.verify compares in constant time
     const ok = await crypto.subtle.verify("HMAC", await hmacKey(secret, ["verify"]), fromB64url(s), enc.encode(`${h}.${p}`));
     if (!ok) return null;
-    const claims = JSON.parse(new TextDecoder().decode(fromB64url(p))) as { sub?: unknown; exp?: unknown };
+    const claims = JSON.parse(new TextDecoder().decode(fromB64url(p))) as { sub?: unknown; exp?: unknown; pv?: unknown };
     if (typeof claims.sub !== "string" || typeof claims.exp !== "number") return null;
     if (claims.exp <= Math.floor(Date.now() / 1000)) return null;
-    return claims.sub;
+    if (typeof claims.pv !== "string") return null; // tokens from before password fingerprints are refused: sign in again
+    return { sub: claims.sub, pv: claims.pv };
   } catch {
     return null;
   }

@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import type { AppBindings, EventRow } from "./types";
-import { sha256, verifyJwt } from "./crypto";
+import { pwFingerprint, sha256, timingSafeEqual, verifyJwt } from "./crypto";
 import { HttpError, rateLimit, type Ctx } from "./http";
 
 export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
@@ -8,12 +8,13 @@ export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
   if (!c.env.JWT_SECRET) throw new HttpError(500, "Server misconfigured");
   const h = c.req.header("authorization") ?? "";
   const m = /^Bearer (\S+)$/.exec(h);
-  const sub = m ? await verifyJwt(m[1]!, c.env.JWT_SECRET) : null;
-  if (!sub) throw new HttpError(401, "Authentication required");
+  const claims = m ? await verifyJwt(m[1]!, c.env.JWT_SECRET) : null;
+  if (!claims) throw new HttpError(401, "Authentication required");
   // A token outlives its account (7 days), so confirm the user still exists: a deleted account must not keep working or create orphan rows.
-  const alive = await c.env.DB.prepare("SELECT 1 FROM users WHERE id = ?").bind(sub).first();
-  if (!alive) throw new HttpError(401, "Authentication required");
-  c.set("userId", sub);
+  // The same row carries the password fingerprint: a token issued before a password change no longer matches.
+  const u = await c.env.DB.prepare("SELECT pw_hash, pw_salt FROM users WHERE id = ?").bind(claims.sub).first<{ pw_hash: string; pw_salt: string }>();
+  if (!u || !timingSafeEqual(await pwFingerprint(u), claims.pv)) throw new HttpError(401, "Authentication required");
+  c.set("userId", claims.sub);
   await next();
 };
 

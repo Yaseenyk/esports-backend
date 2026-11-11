@@ -33,10 +33,11 @@ invites.post("/events/:id/invites", requireUser, async (c) => {
 
 invites.get("/events/:id/invites", requireUser, async (c) => {
   const ev = await ownedEvent(c, c.req.param("id"));
+  const hide = ev.my_role === "viewer"; // the token is a credential that lets its holder submit people: view-only members get it blank
   const rows = await c.env.DB.prepare("SELECT id, team_id, token, label, max_uses, uses, expires_at, revoked, created_at FROM invites WHERE event_id = ? ORDER BY created_at DESC LIMIT 500")
     .bind(ev.id)
     .all<{ id: string; team_id: string; token: string; label: string; max_uses: number | null; uses: number; expires_at: string | null; revoked: number; created_at: string }>();
-  return c.json(rows.results.map((r) => ({ id: r.id, teamId: r.team_id, token: r.token, label: r.label, maxUses: r.max_uses, uses: r.uses, expiresAt: r.expires_at, revoked: !!r.revoked, createdAt: r.created_at })));
+  return c.json(rows.results.map((r) => ({ id: r.id, teamId: r.team_id, token: hide ? "" : r.token, label: r.label, maxUses: r.max_uses, uses: r.uses, expiresAt: r.expires_at, revoked: !!r.revoked, createdAt: r.created_at })));
 });
 
 invites.delete("/events/:id/invites/:inviteId", requireUser, async (c) => {

@@ -10,7 +10,7 @@ interface FormRow { event_id: string; token: string; title: string; intro: strin
 interface RegRow { id: string; event_id: string; team_name: string; captain_name: string; captain_contact: string; players: string; notes: string; status: string; created_at: string }
 interface Player { name: string; ign: string; minor: boolean }
 
-const publicForm = (f: FormRow) => ({ token: f.token, title: f.title, intro: f.intro, closesAt: f.closes_at, maxTeams: f.max_teams, teamSize: f.team_size, subs: f.subs, open: !!f.open, createdAt: f.created_at });
+const publicForm = (f: FormRow, hideToken = false) => ({ token: hideToken ? "" : f.token, title: f.title, intro: f.intro, closesAt: f.closes_at, maxTeams: f.max_teams, teamSize: f.team_size, subs: f.subs, open: !!f.open, createdAt: f.created_at });
 const regOut = (r: RegRow) => ({ id: r.id, teamName: r.team_name, captainName: r.captain_name, captainContact: r.captain_contact, players: JSON.parse(r.players) as Player[], notes: r.notes, status: r.status, createdAt: r.created_at });
 
 function int(v: unknown, field: string, min: number, max: number): number {
@@ -53,7 +53,7 @@ registration.get("/events/:id/registration", requireUser, async (c) => {
   const f = await db.prepare("SELECT * FROM registration_forms WHERE event_id = ?").bind(ev.id).first<FormRow>();
   const counts = await db.prepare("SELECT status, COUNT(*) AS n FROM registrations WHERE event_id = ? GROUP BY status").bind(ev.id).all<{ status: string; n: number }>();
   const by = Object.fromEntries(counts.results.map((r) => [r.status, r.n]));
-  return c.json({ form: f ? publicForm(f) : null, counts: { pending: by.pending ?? 0, approved: by.approved ?? 0, rejected: by.rejected ?? 0 } });
+  return c.json({ form: f ? publicForm(f, ev.my_role === "viewer") : null, counts: { pending: by.pending ?? 0, approved: by.approved ?? 0, rejected: by.rejected ?? 0 } });
 });
 
 registration.get("/events/:id/registrations", requireUser, async (c) => {

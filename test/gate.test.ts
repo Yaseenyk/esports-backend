@@ -189,9 +189,9 @@ describe("account safety", () => {
     expect((await call("/auth/login", { body: { email: u.email, password: "correct horse" } })).status).toBe(401);
     expect((await call("/auth/login", { body: { email: u.email, password: "A-new-passw0rd!" } })).status).toBe(200);
 
-    const ev = await newEvent(u.token, "Doomed");
-    expect((await call("/auth/delete-account", { token: u.token, body: { password: "wrong-one-here" } })).status).toBe(401);
-    expect((await call("/auth/delete-account", { token: u.token, body: { password: "A-new-passw0rd!" } })).status).toBe(200);
+    const ev = await newEvent(ok.json.token, "Doomed");
+    expect((await call("/auth/delete-account", { token: ok.json.token, body: { password: "wrong-one-here" } })).status).toBe(401);
+    expect((await call("/auth/delete-account", { token: ok.json.token, body: { password: "A-new-passw0rd!" } })).status).toBe(200);
     const left = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM users WHERE id = ?1) u, (SELECT COUNT(*) FROM events WHERE id = ?2) e").bind(u.id, ev.id).first<{ u: number; e: number }>();
     expect(left).toEqual({ u: 0, e: 0 });
   });
