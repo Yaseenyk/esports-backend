@@ -21,8 +21,14 @@ interface UserRow {
 }
 const publicUser = (u: UserRow) => ({ id: u.id, email: u.email, name: u.name, createdAt: u.created_at });
 
+/**
+ * One canonical form per mailbox: NFKC folds look-alike forms (fullwidth letters and other compatibility characters)
+ * into plain ones, so a fullwidth spelling and the plain one are the same account for sign-up, sign-in and sharing.
+ */
+export const normEmail = (s: string): string => s.normalize("NFKC").trim().toLowerCase();
+
 function email(v: unknown): string {
-  const e = str(v, "email", 3, 254).toLowerCase();
+  const e = normEmail(str(v, "email", 3, 254));
   if (!EMAIL_RE.test(e)) throw new HttpError(400, "email is not valid");
   return e;
 }
@@ -55,7 +61,7 @@ auth.post("/auth/register", async (c) => {
 auth.post("/auth/login", async (c) => {
   await rateLimit(c, "auth", 10, 15 * 60);
   const body = await readJson(c);
-  const e = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const e = typeof body.email === "string" ? normEmail(body.email) : "";
   const pw = typeof body.password === "string" ? body.password : "";
   if (!e || !pw || pw.length > 200) throw new HttpError(400, "email and password are required");
   const u = await c.env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(e).first<UserRow>();

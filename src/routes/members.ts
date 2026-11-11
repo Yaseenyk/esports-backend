@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import { HttpError, nowIso, rateLimit, readJson, str } from "../http";
 import { ownerEvent, requireUser } from "../auth";
+import { normEmail } from "./auth";
 
 export const members = new Hono<AppBindings>();
 
@@ -23,7 +24,7 @@ members.post("/events/:id/members", requireUser, async (c) => {
   const ev = await ownerEvent(c, c.req.param("id"));
   await rateLimit(c, "members", 30, 3600);
   const b = await readJson(c);
-  const email = str(b.email, "email", 3, 254).toLowerCase();
+  const email = normEmail(str(b.email, "email", 3, 254));
   if (b.role !== "editor" && b.role !== "viewer") throw new HttpError(400, "role must be editor or viewer");
   const user = await c.env.DB.prepare("SELECT id, name, email FROM users WHERE email = ?").bind(email).first<{ id: string; name: string; email: string }>();
   if (!user) throw new HttpError(404, "There is no account with that email. Ask them to sign up first, then add them.");

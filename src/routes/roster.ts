@@ -118,9 +118,11 @@ roster.put("/events/:id/roster", async (c) => {
     );
   }
   // Photos of people that stay in the roster are kept; everything tied to removed people goes.
-  for (const t of ["photos", "checkins", "share_links"]) {
-    stmts.push(db.prepare(`DELETE FROM ${t} WHERE event_id = ? AND person_id NOT IN (SELECT id FROM people WHERE event_id = ?)`).bind(ev.id, ev.id));
-  }
+  stmts.push(
+    db.prepare("DELETE FROM photos WHERE event_id = ? AND person_id NOT IN (SELECT id FROM people WHERE event_id = ?)").bind(ev.id, ev.id),
+    db.prepare("DELETE FROM checkins WHERE event_id = ? AND person_id NOT IN (SELECT id FROM people WHERE event_id = ?)").bind(ev.id, ev.id),
+    db.prepare("DELETE FROM share_links WHERE event_id = ? AND person_id NOT IN (SELECT id FROM people WHERE event_id = ?)").bind(ev.id, ev.id),
+  );
   await db.batch(stmts);
   return c.json({ ok: true, teams: teams.length, people: people.length, photos: photoSet.length });
 });

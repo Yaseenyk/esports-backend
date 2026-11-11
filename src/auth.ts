@@ -10,6 +10,9 @@ export const requireUser: MiddlewareHandler<AppBindings> = async (c, next) => {
   const m = /^Bearer (\S+)$/.exec(h);
   const sub = m ? await verifyJwt(m[1]!, c.env.JWT_SECRET) : null;
   if (!sub) throw new HttpError(401, "Authentication required");
+  // A token outlives its account (7 days), so confirm the user still exists: a deleted account must not keep working or create orphan rows.
+  const alive = await c.env.DB.prepare("SELECT 1 FROM users WHERE id = ?").bind(sub).first();
+  if (!alive) throw new HttpError(401, "Authentication required");
   c.set("userId", sub);
   await next();
 };
