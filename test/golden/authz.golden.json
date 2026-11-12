@@ -553,6 +553,7 @@
   "public POST /admin/v1/users/:id/restore": "404 | Not found | ",
   "public POST /admin/v1/users/:id/suspend": "404 | Not found | ",
   "public POST /auth/forgot": "400 | email must be a string | ",
+  "public POST /auth/google": "400 | credential is required | ",
   "public POST /auth/login": "400 | email and password are required | ",
   "public POST /auth/register": "400 | email must be a string | ",
   "public POST /auth/reset": "400 | password must be 8-200 characters | ",

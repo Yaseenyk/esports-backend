@@ -16,6 +16,7 @@ import { linksBackfillTick } from "./features/links-backfill";
 import { mountFeatures } from "./features";
 import { verify } from "./routes/verify";
 import { track } from "./routes/track";
+import { google } from "./routes/google";
 import { admin } from "./admin/routes";
 import { publicReports } from "./moderation/public-reports";
 import { orgs } from "./orgs/routes";
@@ -65,6 +66,7 @@ app.route("/", members);
 app.route("/", live);
 app.route("/", verify);
 app.route("/", track);
+app.route("/", google);
 app.route("/", admin); // Phase 1: /admin/v1 (staff; 404 for everyone else)
 app.route("/", publicReports);
 app.route("/", api); // Phases 4, 6, 7: /me/analytics, /me/api-keys, /me/entitlements (always on) and the read-only /api/v1
