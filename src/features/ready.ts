@@ -5,6 +5,8 @@ import { ownedEvent, requireUser } from "../auth";
 import { resolveCaptainToken } from "../captains";
 import { applyResult, listMatches, upsertMatches, type Match } from "../matches";
 import type { RouteRules } from "./types";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 /**
  * Team ready-check and forfeit timers.
@@ -158,6 +160,7 @@ routes.get("/public/ready/:token", async (c) => {
   rateLimitSoft(c, "readyPubGet", 120, 60);
   const ctx = await resolveCaptainToken(c.env, c.req.param("token"));
   if (!ctx) throw new HttpError(404, "This link is not valid. Ask the organiser for a new one.");
+  if (await takenDown(c.env.DB, { type: "results", id: ctx.linkId, eventId: ctx.eventId })) throw new HttpError(404, "This link is not valid. Ask the organiser for a new one.");
   const grace = await graceFor(c.env, ctx.eventId);
   const ready = await readyMap(c.env, ctx.eventId);
   const now = Date.now();
@@ -183,10 +186,13 @@ routes.get("/public/ready/:token", async (c) => {
 });
 
 routes.post("/public/ready/:token/matches/:mid", async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   await rateLimit(c, "readyPubPost", 40, 60);
   const token = c.req.param("token");
   const ctx = await resolveCaptainToken(c.env, token);
   if (!ctx) throw new HttpError(404, "This link is not valid. Ask the organiser for a new one.");
+  if (await takenDown(c.env.DB, { type: "results", id: ctx.linkId, eventId: ctx.eventId })) throw new HttpError(404, "This link is not valid. Ask the organiser for a new one.");
   await rateLimitSubject(c, "readyPubLink", ctx.linkId, 60, 60);
   const mid = idStr(c.req.param("mid"), "match id");
   const b = await readJson(c, 1_000);

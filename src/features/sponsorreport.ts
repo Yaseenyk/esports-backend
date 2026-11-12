@@ -3,6 +3,8 @@ import type { AppBindings } from "../types";
 import { HttpError, rateLimitSoft, rateLimitSubject, readJson } from "../http";
 import { ownedEvent, requireUser } from "../auth";
 import type { RouteRules } from "./types";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 /**
  * Privacy-friendly page-load counters. A hit increments one number per (event, UTC day, source, view).
@@ -38,8 +40,10 @@ routes.post("/public/hit/:slug", async (c) => {
   // Unknown, malformed and unpublished pages all answer exactly like a counted hit: no information, no effect.
   const done = () => c.body(null, 204);
   if (!SLUG_RE.test(slug)) return done();
+  if (await killGate(c, "kill.public_writes")) return done(); // a switched-off write answers like a counted hit: no information, no effect
   const row = await c.env.DB.prepare("SELECT event_id FROM live_pages WHERE slug = ? AND published = 1").bind(slug).first<{ event_id: string }>();
   if (!row) return done();
+  if (await takenDown(c.env.DB, { type: "live_page", id: row.event_id, eventId: row.event_id })) return done();
   await c.env.DB.prepare(
     "INSERT INTO live_hits (event_id, day, source, view, hits) VALUES (?, ?, ?, ?, 1) ON CONFLICT (event_id, day, source, view) DO UPDATE SET hits = hits + 1",
   ).bind(row.event_id, dayOf(Date.now()), source, view).run();

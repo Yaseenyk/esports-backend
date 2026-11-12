@@ -6,6 +6,9 @@ import { HttpError, nowIso, rateLimit, rateLimitSoft, rateLimitSubject, readJson
 import { ownedEvent, requireUser } from "../auth";
 import { randomToken, sha256 } from "../crypto";
 import { DEFAULT_APP_URL } from "../mailer";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
+import { getFlag } from "../flags";
 
 /** Public events listing. Owner side: GET/PUT /events/:id/directory. Public side: list and report. Nothing about the owner is ever returned publicly. */
 export const routes = new Hono<AppBindings>();
@@ -146,14 +149,15 @@ routes.get("/public/directory", async (c) => {
   const pageRaw = c.req.query("page");
   const page = pageRaw === undefined ? 1 : Number(pageRaw);
   if (!Number.isInteger(page) || page < 1 || page > 500) throw new HttpError(400, "page must be a whole number from 1");
+  const enforce = (await getFlag(c.env.DB, "takedown.enforce")) ? 1 : 0; // inert while the rollout flag is off (cached read, 10 s)
   const today = dayShift(0);
   const from = dayShift(-7); // an event stays visible, marked as ended, for a week
   const rows = await c.env.DB.prepare(
-    "SELECT d.event_id, d.title, d.game, d.city, d.mode, d.starts_on, d.blurb, d.reg_link FROM directory_entries d WHERE d.listed = 1 AND d.held_at IS NULL AND d.starts_on >= ?1 AND (?2 IS NULL OR d.game = ?2 COLLATE NOCASE) AND (?3 IS NULL OR d.city = ?3 COLLATE NOCASE) AND (?4 IS NULL OR d.mode = ?4) AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id AND r.resolved_at IS NULL) < ?5 ORDER BY d.starts_on DESC, d.event_id LIMIT ?6 OFFSET ?7",
-  ).bind(from, game, city, mode || null, HIDE_AT, PAGE + 1, (page - 1) * PAGE).all<Row>();
+    "SELECT d.event_id, d.title, d.game, d.city, d.mode, d.starts_on, d.blurb, d.reg_link FROM directory_entries d WHERE d.listed = 1 AND d.held_at IS NULL AND d.starts_on >= ?1 AND (?2 IS NULL OR d.game = ?2 COLLATE NOCASE) AND (?3 IS NULL OR d.city = ?3 COLLATE NOCASE) AND (?4 IS NULL OR d.mode = ?4) AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id AND r.resolved_at IS NULL) < ?5 AND (?8 = 0 OR (NOT EXISTS (SELECT 1 FROM takedowns t WHERE t.state = 'hidden' AND ((t.target_type = 'directory_entry' AND t.target_id = d.event_id) OR (t.target_type = 'event' AND t.target_id = d.event_id))) AND NOT EXISTS (SELECT 1 FROM events x JOIN organisations o ON o.id = x.org_id WHERE x.id = d.event_id AND o.status = 'suspended'))) ORDER BY d.starts_on DESC, d.event_id LIMIT ?6 OFFSET ?7",
+  ).bind(from, game, city, mode || null, HIDE_AT, PAGE + 1, (page - 1) * PAGE, enforce).all<Row>();
   const all = await c.env.DB.prepare(
-    "SELECT d.game AS game, d.city AS city FROM directory_entries d WHERE d.listed = 1 AND d.held_at IS NULL AND d.starts_on >= ?1 AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id AND r.resolved_at IS NULL) < ?2 LIMIT 500",
-  ).bind(from, HIDE_AT).all<{ game: string; city: string }>();
+    "SELECT d.game AS game, d.city AS city FROM directory_entries d WHERE d.listed = 1 AND d.held_at IS NULL AND d.starts_on >= ?1 AND (SELECT COUNT(DISTINCT r.reporter) FROM directory_reports r WHERE r.event_id = d.event_id AND r.resolved_at IS NULL) < ?2 AND (?3 = 0 OR (NOT EXISTS (SELECT 1 FROM takedowns t WHERE t.state = 'hidden' AND ((t.target_type = 'directory_entry' AND t.target_id = d.event_id) OR (t.target_type = 'event' AND t.target_id = d.event_id))) AND NOT EXISTS (SELECT 1 FROM events x JOIN organisations o ON o.id = x.org_id WHERE x.id = d.event_id AND o.status = 'suspended'))) LIMIT 500",
+  ).bind(from, HIDE_AT, enforce).all<{ game: string; city: string }>();
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort((a, b) => a.localeCompare(b)).slice(0, 60);
   const body = JSON.stringify({
     entries: rows.results.slice(0, PAGE).map((r) => ({ id: r.event_id, title: r.title, game: r.game, city: r.city, mode: r.mode, startsOn: r.starts_on, blurb: r.blurb, regLink: r.reg_link, ended: r.starts_on < today })),
@@ -170,12 +174,15 @@ routes.get("/public/directory", async (c) => {
 });
 
 routes.post("/public/directory/:eventId/report", async (c) => {
+  const off = await killGate(c, "kill.directory");
+  if (off) return off;
   await rateLimit(c, "directoryReport", 5, 3600);
   const eventId = c.req.param("eventId").slice(0, 64);
   const b = await readJson(c, 4_000);
   const reason = typeof b.reason === "string" ? clean(b.reason).slice(0, 200) : "";
   const row = await c.env.DB.prepare("SELECT 1 AS x FROM directory_entries WHERE event_id = ? AND listed = 1").bind(eventId).first();
   if (!row) throw new HttpError(404, "not_found");
+  if (await takenDown(c.env.DB, { type: "directory_entry", id: eventId, eventId })) throw new HttpError(404, "not_found");
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
   const reporter = await sha256(`${c.env.JWT_SECRET}|directoryReporter|${ip}`);
   await c.env.DB.prepare("INSERT INTO directory_reports (id, event_id, reason, reporter, created_at) VALUES (?, ?, ?, ?, ?)").bind(randomToken(), eventId, reason, reporter, nowIso()).run();

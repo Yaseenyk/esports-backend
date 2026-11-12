@@ -4,6 +4,8 @@ import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, type Ctx 
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { listMatches, publicMatch } from "../matches";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 export const live = new Hono<AppBindings>();
 
@@ -116,6 +118,8 @@ live.get("/events/:id/live", requireUser, async (c) => {
 });
 
 live.put("/events/:id/live", requireUser, async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   const ev = await ownedEvent(c, c.req.param("id"));
   await rateLimitSubject(c, "livePut", c.get("userId"), 60, 3600);
   const b = await readJson(c, 400_000);
@@ -148,6 +152,7 @@ live.get("/public/live/:slug", async (c) => {
     "SELECT e.id AS event_id, e.name AS name, e.date AS date, e.venue AS venue, l.snapshot AS snapshot, l.updated_at AS updated_at FROM live_pages l JOIN events e ON e.id = l.event_id WHERE l.slug = ? AND l.published = 1",
   ).bind(slug).first<{ event_id: string; name: string; date: string; venue: string; snapshot: string; updated_at: string }>();
   if (!row) throw new HttpError(404, "not_found");
+  if (await takenDown(c.env.DB, { type: "live_page", id: row.event_id, eventId: row.event_id })) throw new HttpError(404, "not_found");
   const matches = (await listMatches(c.env, row.event_id)).map(publicMatch);
   // `matches` is only present when the event has some, so pages without matches keep exactly the old body (and ETag). The ETag hashes the body, so it changes when a match does.
   // pollMs is a hint for the page's refresh cadence (OD-D): 20 s while a match is live, 120 s otherwise. It is in the body, not a header, because browsers cannot read custom headers cross-origin.

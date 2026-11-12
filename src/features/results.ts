@@ -6,6 +6,8 @@ import { ownedEvent, requireUser } from "../auth";
 import { createCaptainLink, listCaptainLinks, resolveCaptainToken, revokeCaptainLink } from "../captains";
 import { imageResponse, parsePhotoDataUrl } from "../images";
 import { applyResult, listMatches, type Match } from "../matches";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 /**
  * Captain result submission. A captain opens their team's link, reports the score of one of their matches (with an optional screenshot),
@@ -196,6 +198,7 @@ async function captain(c: Ctx, token: string, scope: string, perTokenIp: number,
     await rateLimit(c, "reportfail", 20, 600); // guessing tokens is throttled per address
     throw new HttpError(404, "This link is not valid any more. Ask the organiser for a new one.");
   }
+  if (await takenDown(c.env.DB, { type: "results", id: ctx.linkId, eventId: ctx.eventId })) throw new HttpError(404, "This link is not valid any more. Ask the organiser for a new one.");
   return ctx;
 }
 
@@ -239,6 +242,8 @@ function score(v: unknown, field: string): number {
 }
 
 routes.post("/public/report/:token/matches/:mid", async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   const token = c.req.param("token");
   const ctx = await captain(c, token, "reportPost", 30, 90);
   const b = await readJson(c, MAX_PROOF_CHARS + 20_000);

@@ -4,6 +4,7 @@ import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, str, type
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { validateLogo } from "../images";
+import { takenDown } from "../moderation/takedown";
 
 export const routes = new Hono<AppBindings>();
 
@@ -88,6 +89,7 @@ routes.get("/public/brand/:slug", async (c) => {
   const ev = await c.env.DB.prepare("SELECT e.id AS id, e.owner_id AS owner_id FROM live_pages l JOIN events e ON e.id = l.event_id WHERE l.slug = ? AND l.published = 1")
     .bind(slug).first<{ id: string; owner_id: string }>();
   if (!ev) throw new HttpError(404, "not_found");
+  if (await takenDown(c.env.DB, { type: "live_page", id: ev.id, eventId: ev.id })) throw new HttpError(404, "not_found");
   const { brand } = await effective(c, ev.id, ev.owner_id);
   // Only what the page shows: no ids, no owner, no timestamps.
   const body = JSON.stringify({ brand: brand ? { name: brand.name, logo: brand.logo, primaryColor: brand.primaryColor, secondaryColor: brand.secondaryColor } : null });

@@ -4,6 +4,8 @@ import { hashToken, newLink, revealToken, verifyPresented } from "../links";
 import { HttpError, idStr, inHours, nowIso, optBool, optHours, optStr, rateLimit, readJson, str } from "../http";
 import { blobBytes, imageResponse, parsePhotoDataUrl } from "../images";
 import { ownedEvent, requireUser } from "../auth";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 export const invites = new Hono<AppBindings>();
 
@@ -175,6 +177,7 @@ async function usableInvite(c: { env: AppBindings["Bindings"] }, token: string):
       .bind(token, now)
       .first<InviteRow & { token: string; token_hash: string | null }>());
   if (!row || !(await verifyPresented(token, row))) throw new HttpError(404, "Invite not found");
+  if (await takenDown(db, { type: "event", id: row.event_id, eventId: row.event_id })) throw new HttpError(404, "Invite not found");
   return row;
 }
 
@@ -185,6 +188,8 @@ invites.get("/public/invite/:token", async (c) => {
 });
 
 invites.post("/public/invite/:token/submit", async (c) => {
+  const off = await killGate(c, "kill.public_forms");
+  if (off) return off;
   const token = c.req.param("token");
   await rateLimit(c, "submit", 30, 3600, token);
   const b = await readJson(c);

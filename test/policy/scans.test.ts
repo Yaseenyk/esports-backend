@@ -34,6 +34,9 @@ export const OWNER_ID_BASELINE: Record<string, number> = {
   "src/features/reminders.ts": 1,
   "src/routes/events.ts": 9,
   "src/routes/members.ts": 2,
+  // Staff tooling, not an access decision: a metadata lookup (counts and ids) and the conflict-of-interest check that stops staff ruling on their own events.
+  "src/admin/lookup.ts": 3,
+  "src/moderation/takedown.ts": 1,
 };
 
 function ratchet(re: RegExp, baseline: Record<string, number>) {

@@ -16,6 +16,8 @@ import { linksBackfillTick } from "./features/links-backfill";
 import { mountFeatures } from "./features";
 import { verify } from "./routes/verify";
 import { track } from "./routes/track";
+import { admin } from "./admin/routes";
+import { publicReports } from "./moderation/public-reports";
 
 const app = new Hono<AppBindings>();
 
@@ -60,6 +62,8 @@ app.route("/", members);
 app.route("/", live);
 app.route("/", verify);
 app.route("/", track);
+app.route("/", admin); // Phase 1: /admin/v1 (staff; 404 for everyone else)
+app.route("/", publicReports);
 mountFeatures(app);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));

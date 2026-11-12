@@ -1,11 +1,14 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../types";
 import { HttpError, nowIso, optStr, rateLimit, readJson, str } from "../http";
+import { killGate } from "../admin/kill";
 
 export const contact = new Hono<AppBindings>();
 
 /** The public contact form. Messages are stored for the owner to read; nothing is emailed or shared. */
 contact.post("/public/contact", async (c) => {
+  const off = await killGate(c, "kill.public_forms");
+  if (off) return off;
   await rateLimit(c, "contact", 5, 3600);
   const b = await readJson(c);
   // A hidden field real people never fill in: a filled one means a bot, which gets a normal-looking answer and no stored message.

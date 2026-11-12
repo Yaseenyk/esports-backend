@@ -4,6 +4,7 @@ import type { RouteRules } from "./types";
 import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, str, type Ctx } from "../http";
 import { randomToken, sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
+import { takenDown } from "../moderation/takedown";
 
 export const routes = new Hono<AppBindings>();
 
@@ -121,6 +122,7 @@ routes.get("/public/run/:token", async (c) => {
     "SELECT e.id AS event_id, e.name AS name, e.date AS date, e.venue AS venue, l.show_notes AS show_notes FROM runofshow_links l JOIN events e ON e.id = l.event_id WHERE l.token_hash = ?",
   ).bind(await sha256(token)).first<{ event_id: string; name: string; date: string; venue: string; show_notes: number }>();
   if (!link) throw new HttpError(404, "not_found");
+  if (await takenDown(c.env.DB, { type: "event", id: link.event_id, eventId: link.event_id })) throw new HttpError(404, "not_found");
   const items = (await listItems(c, link.event_id)).map((r) => {
     const s = shape(r);
     return { id: s.id, atTime: s.atTime, dayOffset: s.dayOffset, title: s.title, ownerName: s.ownerName, status: s.status, ...(link.show_notes === 1 && s.notes ? { notes: s.notes } : {}) };

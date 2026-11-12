@@ -13,6 +13,8 @@ export default defineConfig(async () => {
             JWT_SECRET: "test-secret-test-secret-test-secret",
             PBKDF2_ITERATIONS: "1000",
             LINK_KEY: "test-link-key-test-link-key-test-link-key",
+            STAFF_JWT_SECRET: "test-staff-secret-test-staff-secret-test-staff",
+            TOTP_KEK: "test-totp-kek-test-totp-kek-test-totp-kek",
             TEST_MIGRATIONS: migrations,
           },
         },

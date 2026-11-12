@@ -5,6 +5,8 @@ import { ownedEvent, requireUser } from "../auth";
 import { randomToken, sha256 } from "../crypto";
 import { applyResult, listBr, listMatches, putBr, upsertMatches, type Match } from "../matches";
 import type { RouteRules } from "./types";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 /**
  * Scorer mode. An organiser makes a link; whoever holds it can enter results for the matches in its scope, nothing else.
@@ -99,6 +101,7 @@ async function resolve(c: Ctx, token: string, perTokenLimit: number): Promise<Sc
   const hash = await sha256(token);
   const r = await c.env.DB.prepare("SELECT id, event_id, label, stage, expires_at, revoked_at, created_at FROM scorer_links WHERE token_hash = ?").bind(hash).first<LinkRow>();
   if (!r || r.revoked_at !== null || r.expires_at <= nowIso()) { await rateLimit(c, "scoreFail", 20, 600); throw notFound(); }
+  if (await takenDown(c.env.DB, { type: "event", id: r.event_id, eventId: r.event_id })) { await rateLimit(c, "scoreFail", 20, 600); throw notFound(); }
   await rateLimitSubject(c, `scoreTok${perTokenLimit}`, hash, perTokenLimit, 600);
   return { linkId: r.id, eventId: r.event_id, label: r.label, stage: r.stage, expiresAt: r.expires_at };
 }
@@ -132,6 +135,8 @@ routes.get("/public/score/:token", async (c) => {
 });
 
 routes.post("/public/score/:token/matches/:mid/result", async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   const s = await resolve(c, c.req.param("token"), 120);
   const mid = idStr(c.req.param("mid"), "match id");
   const b = await readJson(c, 4_000);
@@ -175,6 +180,8 @@ routes.post("/public/score/:token/matches/:mid/result", async (c) => {
 });
 
 routes.post("/public/score/:token/br", async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   const s = await resolve(c, c.req.param("token"), 120);
   if (!brAllowed(s)) throw new HttpError(403, "This link is not for battle royale results");
   const b = await readJson(c, 40_000);

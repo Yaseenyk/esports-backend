@@ -3,6 +3,8 @@ import type { AppBindings } from "../types";
 import { hashToken, newLink, revealToken, verifyPresented } from "../links";
 import { HttpError, nowIso, optBool, optStr, rateLimit, readJson, str } from "../http";
 import { ownedEvent, requireUser } from "../auth";
+import { takenDown } from "../moderation/takedown";
+import { killGate } from "../admin/kill";
 
 export const registration = new Hono<AppBindings>();
 
@@ -121,6 +123,7 @@ async function openForm(c: Parameters<typeof ownedEvent>[0], token: string) {
     (await db.prepare("SELECT f.*, e.name AS event_name, e.date AS event_date, e.venue AS event_venue FROM registration_forms f JOIN events e ON e.id = f.event_id WHERE f.token_hash = ?").bind(await hashToken(token)).first<Open>()) ??
     (await db.prepare("SELECT f.*, e.name AS event_name, e.date AS event_date, e.venue AS event_venue FROM registration_forms f JOIN events e ON e.id = f.event_id WHERE f.token = ? AND f.token_hash IS NULL").bind(token).first<Open>());
   if (!row || !(await verifyPresented(token, row))) throw new HttpError(404, "Not found");
+  if (await takenDown(db, { type: "registration_form", id: row.event_id, eventId: row.event_id })) throw new HttpError(404, "Not found");
   const taken = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM registrations WHERE event_id = ? AND status != 'rejected'").bind(row.event_id).first<{ n: number }>();
   const closed = !row.open || (row.closes_at !== null && Date.parse(row.closes_at) < Date.now());
   const full = row.max_teams !== null && (taken?.n ?? 0) >= row.max_teams;
@@ -137,6 +140,8 @@ registration.get("/public/registration/:token", async (c) => {
 });
 
 registration.post("/public/registration/:token/submit", async (c) => {
+  const off = await killGate(c, "kill.public_forms");
+  if (off) return off;
   const token = c.req.param("token");
   await rateLimit(c, "register", 10, 3600, token);
   const b = await readJson(c);

@@ -4,6 +4,7 @@ import { importPassKey, passSig, timingSafeEqual } from "../crypto";
 import { HttpError, nowIso, readJson } from "../http";
 import { blobBytes, imageResponse } from "../images";
 import { requireGate } from "../auth";
+import { killGate } from "../admin/kill";
 
 export const gate = new Hono<AppBindings>();
 gate.use("/gate/*", requireGate);
@@ -81,12 +82,16 @@ async function checkCode(c: Ctx, code: string) {
 }
 
 gate.post("/gate/checkin", async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   const body = await readJson(c);
   return c.json(await checkCode(c, typeof body.code === "string" ? body.code : ""));
 });
 
 /** Replays scans that were queued while the gate was offline. Up to 100 codes cost a handful of queries, not several per scan. */
 gate.post("/gate/checkin/batch", async (c) => {
+  const off = await killGate(c, "kill.public_writes");
+  if (off) return off;
   const body = await readJson(c);
   const codes = Array.isArray(body.codes) ? body.codes.filter((x): x is string => typeof x === "string") : [];
   if (codes.length === 0 || codes.length > 100) throw new HttpError(400, "Send between 1 and 100 codes");

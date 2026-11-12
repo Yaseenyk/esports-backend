@@ -5,6 +5,7 @@ import { HttpError, ID_RE, nowIso, rateLimitSoft, rateLimitSubject, readJson, ty
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { deriveWinner, listBr, listMatches, type BrResult, type Match } from "../matches";
+import { takenDown } from "../moderation/takedown";
 
 /**
  * Opt-in TEAM pages. Privacy rules: no player names, photos or emails anywhere; free text must not contain an email address or a phone-like number;
@@ -215,6 +216,7 @@ routes.get("/public/team/:slug", async (c) => {
   const p = await c.env.DB.prepare("SELECT id, name, blurb, links, updated_at FROM team_profiles WHERE slug = ? AND published = 1")
     .bind(slug).first<{ id: string; name: string; blurb: string; links: string; updated_at: string }>();
   if (!p) throw new HttpError(404, "not_found");
+  if (await takenDown(c.env.DB, { type: "team_profile", id: p.id })) throw new HttpError(404, "not_found");
   const links = (await c.env.DB.prepare(
     "SELECT l.event_id AS event_id, l.team_name AS team_name, e.name AS event_name, e.date AS date FROM team_profile_events l JOIN events e ON e.id = l.event_id WHERE l.profile_id = ? LIMIT 40",
   ).bind(p.id).all<{ event_id: string; team_name: string; event_name: string; date: string }>()).results;

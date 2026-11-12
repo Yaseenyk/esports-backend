@@ -5,6 +5,7 @@ import { HttpError, nowIso, rateLimitSoft, rateLimitSubject, readJson, type Ctx 
 import { sha256 } from "../crypto";
 import { ownedEvent, requireUser } from "../auth";
 import { listBr, listMatches, publicMatch } from "../matches";
+import { takenDown } from "../moderation/takedown";
 
 /**
  * Season leaderboard: the organiser's scoring settings (placement scale, points per kill, win/draw/loss points, day boundaries) and a public page.
@@ -147,6 +148,7 @@ routes.get("/public/league/:slug", async (c) => {
     "SELECT e.id AS event_id, e.name AS name, e.date AS date, e.venue AS venue, l.title AS title, l.scale AS scale, l.per_kill AS per_kill, l.win_pts AS win_pts, l.draw_pts AS draw_pts, l.loss_pts AS loss_pts, l.days AS days, l.updated_at AS updated_at FROM league_settings l JOIN events e ON e.id = l.event_id WHERE l.slug = ? AND l.published = 1",
   ).bind(slug).first<{ event_id: string; name: string; date: string; venue: string; title: string; scale: string; per_kill: number; win_pts: number; draw_pts: number; loss_pts: number; days: string; updated_at: string }>();
   if (!row) throw new HttpError(404, "not_found");
+  if (await takenDown(c.env.DB, { type: "league_page", id: row.event_id, eventId: row.event_id })) throw new HttpError(404, "not_found");
   const [matches, br] = await Promise.all([listMatches(c.env, row.event_id), listBr(c.env, row.event_id)]);
   const s = settingsOf(row);
   const body = JSON.stringify({

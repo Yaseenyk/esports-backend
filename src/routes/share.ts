@@ -5,6 +5,7 @@ import { hashToken, newLink, revealToken, verifyPresented } from "../links";
 import { HttpError, nowIso } from "../http";
 import { blobBytes, imageResponse } from "../images";
 import { ownedEvent, requireUser } from "../auth";
+import { takenDown } from "../moderation/takedown";
 
 export const share = new Hono<AppBindings>();
 
@@ -28,6 +29,7 @@ share.delete("/events/:id/people/:personId/share", requireUser, async (c) => {
 });
 
 interface PassRow {
+  id: string;
   token: string;
   token_hash: string | null;
   person_id: string;
@@ -39,9 +41,10 @@ async function linkFor(c: { env: AppBindings["Bindings"] }, token: string) {
   if (token.length > 64) throw new HttpError(404, "Not found");
   const db = c.env.DB;
   const row =
-    (await db.prepare("SELECT token, token_hash, person_id, event_id FROM share_links WHERE token_hash = ? AND revoked = 0").bind(await hashToken(token)).first<PassRow>()) ??
-    (await db.prepare("SELECT token, token_hash, person_id, event_id FROM share_links WHERE token = ? AND token_hash IS NULL AND revoked = 0").bind(token).first<PassRow>());
+    (await db.prepare("SELECT id, token, token_hash, person_id, event_id FROM share_links WHERE token_hash = ? AND revoked = 0").bind(await hashToken(token)).first<PassRow>()) ??
+    (await db.prepare("SELECT id, token, token_hash, person_id, event_id FROM share_links WHERE token = ? AND token_hash IS NULL AND revoked = 0").bind(token).first<PassRow>());
   if (!row || !(await verifyPresented(token, row))) throw new HttpError(404, "Not found");
+  if (await takenDown(db, { type: "pass", id: row.id, eventId: row.event_id })) throw new HttpError(404, "Not found");
   return row;
 }
 
