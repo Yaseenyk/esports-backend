@@ -19,6 +19,7 @@ const feature: FeatureRoutes = {
     { method: "DELETE", path: "/orgs/:id/invitations/:iid" },
     { method: "GET", path: "/orgs/:id/events" },
     { method: "GET", path: "/orgs/:id/audit" },
+    { method: "GET", path: "/orgs/:id/analytics" },
   ],
 };
 export default feature;

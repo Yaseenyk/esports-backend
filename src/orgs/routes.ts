@@ -9,6 +9,7 @@ import { acceptInvitation, createOrgInvitation, listOrgInvitations, revokeOrgInv
 import { changeRole, getOrg, listMembers, removeMember } from "./people";
 import { orgEvents } from "./home";
 import { orgAudit } from "./audit-view";
+import { orgAnalytics } from "../api/analytics";
 
 /**
  * Organisation and account-data routes (Phase 2a-i). Mounted by ONE line in src/index.ts.
@@ -43,3 +44,4 @@ orgs.get("/orgs/:id/invitations", gate, requireUser, listOrgInvitations);
 orgs.delete("/orgs/:id/invitations/:iid", gate, requireUser, revokeOrgInvitation);
 orgs.get("/orgs/:id/events", gate, requireUser, orgEvents);
 orgs.get("/orgs/:id/audit", gate, requireUser, orgAudit);
+orgs.get("/orgs/:id/analytics", gate, requireUser, orgAnalytics);

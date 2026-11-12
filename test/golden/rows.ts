@@ -61,6 +61,12 @@ export const ACCOUNT: { method: string; path: string; body?: unknown }[] = [
   { method: "GET", path: "/me/context" },
   { method: "POST", path: "/me/export" },
   { method: "GET", path: "/me/deletion-preview" },
+  // Phases 4, 6, 7: always on, user token only (analytics counts, API keys, the free plan)
+  { method: "GET", path: "/me/analytics" },
+  { method: "GET", path: "/me/api-keys" },
+  { method: "POST", path: "/me/api-keys", body: { label: "matrix" } },
+  { method: "DELETE", path: "/me/api-keys/:id" },
+  { method: "GET", path: "/me/entitlements" },
   // brand kit and team profiles belong to the signed-in user, not to an event
   { method: "GET", path: "/brand" },
   { method: "PUT", path: "/brand", body: { name: "x", primaryColor: "#0a84ff", secondaryColor: "#7c3aed" } },

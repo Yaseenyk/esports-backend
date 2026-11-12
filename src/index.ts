@@ -19,6 +19,7 @@ import { track } from "./routes/track";
 import { admin } from "./admin/routes";
 import { publicReports } from "./moderation/public-reports";
 import { orgs } from "./orgs/routes";
+import { api } from "./api/routes";
 
 const app = new Hono<AppBindings>();
 
@@ -30,7 +31,8 @@ app.use("*", async (c, next) => {
     .map((s) => s.trim())
     .filter(Boolean);
   const origin = c.req.header("origin");
-  const originOk = !!origin && allowed.includes(origin);
+  // The public API (/api/v1) is for servers: CORS stays closed there, so no browser page on any origin can read it.
+  const originOk = !!origin && allowed.includes(origin) && !c.req.path.startsWith("/api/v1/");
   if (c.req.method === "OPTIONS") {
     if (!originOk) return c.json({ error: "Origin not allowed" }, 403);
     return new Response(null, {
@@ -65,6 +67,7 @@ app.route("/", verify);
 app.route("/", track);
 app.route("/", admin); // Phase 1: /admin/v1 (staff; 404 for everyone else)
 app.route("/", publicReports);
+app.route("/", api); // Phases 4, 6, 7: /me/analytics, /me/api-keys, /me/entitlements (always on) and the read-only /api/v1
 app.route("/", orgs); // Phase 2a-i: /me/context, /me/export, and the /orgs routes (404 unless flag orgs.team is on)
 mountFeatures(app);
 

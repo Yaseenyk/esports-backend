@@ -19,6 +19,7 @@ const GATED: [string, string][] = [
   ["DELETE", "/orgs/x1/invitations/x2"],
   ["GET", "/orgs/x1/events"],
   ["GET", "/orgs/x1/audit"],
+  ["GET", "/orgs/x1/analytics"],
 ];
 
 describe("flag orgs.team off (the default)", () => {
