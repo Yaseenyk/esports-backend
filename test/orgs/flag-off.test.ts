@@ -53,7 +53,7 @@ describe("flag orgs.team off (the default)", () => {
     expect(Object.keys(ctx).sort()).toEqual(["features", "orgs", "staff", "user"]);
     expect(ctx.features).toEqual({ teamOrgs: false });
     expect(ctx.staff).toBeNull();
-    expect(ctx.user).toEqual({ id: u.id, email: u.email, name: "Ctx User", emailVerified: false });
+    expect(ctx.user).toEqual({ id: u.id, email: u.email, name: "Ctx User", emailVerified: false, verifyRequired: false });
     expect(ctx.orgs).toHaveLength(1);
     expect(ctx.orgs[0]).toMatchObject({ id: `org-${u.id}`, kind: "personal", role: "admin", status: "active" });
     expect(ctx.orgs[0].caps).toEqual(["org.read", "org.people.manage", "org.events.create", "org.audit.read"]);

@@ -7,6 +7,8 @@ import { requireUser } from "../auth";
 import { afterUserDelete, handoverStatements, personalOrgId, planOrgExit, planOwnershipHandover, soloEvents, SOLO_CHUNK_THRESHOLD, SOLO_PER_REQUEST } from "../ownership";
 import { auditOff, auditStmts } from "../audit";
 import { eventDeleteStatements } from "./events";
+import { getFlag } from "../flags";
+import { sendSignupVerification } from "./verify";
 
 export const auth = new Hono<AppBindings>();
 
@@ -52,18 +54,21 @@ auth.post("/auth/register", async (c) => {
   if (exists) throw new HttpError(409, "An account with this email already exists");
   const h = await hashPassword(pw, iterationsFrom(c.env));
   const user: UserRow = { id: crypto.randomUUID(), email: e, name, pw_hash: h.hash, pw_salt: h.salt, pw_iter: h.iterations, created_at: nowIso() };
+  const mustVerify = (await getFlag(c.env.DB, "auth.verify_required")) ? 1 : 0;
   try {
     // Dual-write (blueprint 5.5): the account, its personal organisation and the admin membership commit together or not at all.
     const orgId = personalOrgId(user.id);
     await c.env.DB.batch([
-      c.env.DB.prepare("INSERT INTO users (id, email, name, pw_hash, pw_salt, pw_iter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(user.id, user.email, user.name, user.pw_hash, user.pw_salt, user.pw_iter, user.created_at),
+      c.env.DB.prepare("INSERT INTO users (id, email, name, pw_hash, pw_salt, pw_iter, created_at, verify_required) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(user.id, user.email, user.name, user.pw_hash, user.pw_salt, user.pw_iter, user.created_at, mustVerify),
       c.env.DB.prepare("INSERT INTO organisations (id, name, kind, status, created_at) VALUES (?1, ?2, 'personal', 'active', ?3)").bind(orgId, `${user.name.slice(0, 60)}'s workspace`, user.created_at),
       c.env.DB.prepare("INSERT INTO org_members (org_id, user_id, role, added_by, added_at) VALUES (?1, ?2, 'admin', ?2, ?3)").bind(orgId, user.id, user.created_at),
     ]);
   } catch {
     throw new HttpError(409, "An account with this email already exists");
   }
+  // The confirmation link goes out at once, so the person finds it waiting. A mail problem never stops the sign-up: they can ask for another.
+  await sendSignupVerification(c, user.id, user.email);
   return c.json({ token: await signJwt(user.id, c.env.JWT_SECRET, await pwFingerprint(user)), user: publicUser(user) }, 201);
 });
 

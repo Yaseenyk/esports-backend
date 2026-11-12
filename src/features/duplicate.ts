@@ -5,6 +5,7 @@ import { randomToken } from "../crypto";
 import { newLink } from "../links";
 import { HttpError, nowIso, optStr, rateLimitSubject, readJson, str } from "../http";
 import { accessibleEvent, requireUser } from "../auth";
+import { requireVerifiedEmail } from "../verify-gate";
 import { chooseOrg, publicEvent, slugify, strictIsoDate } from "../routes/events";
 import { listMatches, MAX_MATCHES } from "../matches";
 
@@ -65,6 +66,7 @@ async function uniqueSlug(db: D1Database, ownerId: string, name: string, teamOrg
 routes.post("/events/:id/duplicate", requireUser, async (c) => {
   // Authorise before reading the body: a stranger gets the same 404 as a missing event.
   const src = await accessibleEvent(c, c.req.param("id"));
+  await requireVerifiedEmail(c);
   const uid = c.get("userId");
   const b = await readJson(c);
   const name = str(b.name, "name", 1, 120);

@@ -11,7 +11,7 @@ export async function meContext(c: Ctx): Promise<Response> {
   const uid = c.get("userId");
   const db = c.env.DB;
   const [u, orgs, teamOrgs] = await Promise.all([
-    db.prepare("SELECT id, email, name, email_verified_at FROM users WHERE id = ?1").bind(uid).first<{ id: string; email: string; name: string; email_verified_at: string | null }>(),
+    db.prepare("SELECT id, email, name, email_verified_at, verify_required FROM users WHERE id = ?1").bind(uid).first<{ id: string; email: string; name: string; email_verified_at: string | null; verify_required: number }>(),
     db
       .prepare("SELECT o.id AS id, o.name AS name, o.kind AS kind, o.status AS status, m.role AS role FROM org_members m JOIN organisations o ON o.id = m.org_id WHERE m.user_id = ?1 ORDER BY m.added_at, o.id LIMIT 10")
       .bind(uid)
@@ -21,7 +21,7 @@ export async function meContext(c: Ctx): Promise<Response> {
   if (!u) throw new HttpError(401, "Authentication required");
   c.header("cache-control", "private, no-store");
   return c.json({
-    user: { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at },
+    user: { id: u.id, email: u.email, name: u.name, emailVerified: !!u.email_verified_at, verifyRequired: u.verify_required === 1 && !u.email_verified_at },
     orgs: orgs.results.map((o) => ({ id: o.id, name: o.name, kind: o.kind, status: o.status, role: o.role, caps: [...(ORG_ROLE_CAPS[o.role] ?? [])] })),
     staff: null,
     features: { teamOrgs },

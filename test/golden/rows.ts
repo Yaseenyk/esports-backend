@@ -55,6 +55,7 @@ export const ACCOUNT: { method: string; path: string; body?: unknown }[] = [
   { method: "GET", path: "/me" },
   { method: "POST", path: "/me/email/verify/start" },
   { method: "POST", path: "/me/email/verify", body: { token: "x" } },
+  { method: "POST", path: "/me/email/change", body: { email: "x" } },
   { method: "POST", path: "/auth/change-password", body: { current: "x", next: "yyyyyyyy" } },
   { method: "POST", path: "/auth/delete-account", body: { password: "x" } },
   // Phase 2a-i: always on, user token only (the /orgs routes are behind flag orgs.team and live in test/features/orgs.routes.ts)

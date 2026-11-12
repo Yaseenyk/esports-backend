@@ -7,6 +7,7 @@ import { getFlag } from "../flags";
 import { personalOrgId } from "../ownership";
 import { orgRoleCan } from "../policy/roles";
 import { orgMembership } from "../orgs/access";
+import { requireVerifiedEmail } from "../verify-gate";
 
 export const events = new Hono<AppBindings>();
 events.use("/events", requireUser);
@@ -127,6 +128,7 @@ export async function chooseOrg(c: Ctx, body: Record<string, unknown>, sourceOrg
 }
 
 events.post("/events", async (c) => {
+  await requireVerifiedEmail(c);
   const b = await readJson(c);
   const target = await chooseOrg(c, b);
   const row: EventRow = {

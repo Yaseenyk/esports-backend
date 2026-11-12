@@ -24,6 +24,7 @@ export interface Flags {
   "kill.public_writes": boolean;
   "admin.enabled": boolean;
   "takedown.enforce": boolean;
+  "auth.verify_required": boolean; // new password sign-ups must confirm their email (users.verify_required is set at sign-up while this is on)
 }
 
 export type FlagKey = keyof Flags;
@@ -42,6 +43,7 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "kill.public_writes": false,
   "admin.enabled": false,
   "takedown.enforce": false,
+  "auth.verify_required": false,
 });
 
 export const FLAG_CACHE_MS = 10_000;

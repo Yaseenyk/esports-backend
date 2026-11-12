@@ -1,4 +1,8 @@
 import { exports } from "cloudflare:workers";
+import { setSignupMailForTests } from "../src/routes/verify";
+
+// Sign-up emails a confirmation link. Most tests count the mail they trigger themselves, so it is off here; test/verify-signup.test.ts turns it on.
+setSignupMailForTests(false);
 
 const worker = (exports as unknown as { default: { fetch(r: Request): Promise<Response> } }).default;
 
