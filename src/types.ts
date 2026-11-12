@@ -31,6 +31,8 @@ export interface EventRow {
   rules: string;
   settings: string;
   starts_on?: string | null;
+  org_id?: string | null;
+  created_by?: string | null;
   signing_secret: string;
   created_at: string;
   updated_at: string;

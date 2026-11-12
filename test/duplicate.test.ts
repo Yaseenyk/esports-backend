@@ -22,7 +22,7 @@ async function world() {
   const t = uniq();
   await env.DB.prepare("INSERT INTO invites (id, event_id, team_id, token, label, uses, revoked, created_at) VALUES (?, ?, 't1', ?, 'x', 0, 0, ?)").bind(`inv${t}`, id, `tok${t}`, new Date().toISOString()).run();
   await env.DB.prepare("INSERT INTO share_links (id, event_id, person_id, token, created_at, revoked) VALUES (?, ?, 'ALP-001', ?, ?, 0)").bind(`sl${t}`, id, `shr${t}`, new Date().toISOString()).run();
-  expect((await call(`/events/${id}/registration`, { method: "PUT", token: o.token, body: { title: "Join the cup", intro: "Welcome", maxTeams: 16, teamSize: 5, subs: 2, open: true, closesAt: "2026-11-30T00:00:00Z" } })).status).toBe(201);
+  expect((await call(`/events/${id}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Join the cup", intro: "Welcome", maxTeams: 16, teamSize: 5, subs: 2, open: true, closesAt: "2026-11-30T00:00:00Z" } })).status).toBe(201);
   const form = (await call(`/events/${id}/registration`, { token: o.token })).json.form;
   await env.DB.prepare("INSERT INTO registrations (id, event_id, team_name, captain_name, captain_contact, players, notes, status, created_at) VALUES (?, ?, 'Zed Team', 'Zed', 'zed@example.com', '[]', '', 'pending', ?)").bind(`reg${t}`, id, new Date().toISOString()).run();
   const live = await call(`/events/${id}/live`, { method: "PUT", token: o.token, body: { published: true, snapshot: { views: [], announcements: [{ text: "Doors open", at: "2026-11-01T10:00:00Z" }], sponsors: [{ name: "Acme" }], ticker: ["Hello"] } } });

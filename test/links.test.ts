@@ -62,7 +62,7 @@ describe("new links are stored hashed and encrypted", () => {
     const s = await setupEvent("Hash Cup");
     const sh = await call(`/events/${s.ev.id}/people/ALP-001/share`, { token: s.token, method: "POST" });
     const inv = await call(`/events/${s.ev.id}/invites`, { token: s.token, body: { teamId: "t1" } });
-    const reg = await call(`/events/${s.ev.id}/registration`, { method: "PUT", token: s.token, body: { title: "T" } });
+    const reg = await call(`/events/${s.ev.id}/registration`, { method: "PUT", token: s.token, body: { acknowledge: true, title: "T" } });
     const tokens = { share: sh.json.token as string, invite: inv.json.token as string, reg: reg.json.token as string };
 
     const rows = [

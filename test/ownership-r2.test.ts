@@ -65,8 +65,11 @@ describe("S1 follow-ups (N-1, N-15, seams)", () => {
     expect((await del(w.o.token)).status).toBe(200); // and it works once the obstacle is gone
   });
 
-  it("the seams return no statements today", () => {
-    expect(extraPerHandover(env.DB, { id: "e", name: "n", slug: "s", newOwnerId: "u", newOwnerName: "U" })).toEqual([]);
-    expect(afterUserDelete(env.DB, "u")).toEqual([]);
+  it("the seams: E1 moves a personal-organisation hand-over, E2 leaves a club event where it is, afterUserDelete removes the leaver's organisations", () => {
+    const h = { id: "e", name: "n", slug: "s", newOwnerId: "u", newOwnerName: "U" };
+    expect(extraPerHandover(env.DB, h)).toHaveLength(1);
+    expect(extraPerHandover(env.DB, { ...h, keepOrg: true })).toEqual([]);
+    expect(afterUserDelete(env.DB, "u")).toHaveLength(1);
+    expect(afterUserDelete(env.DB, "u", ["a", "b"])).toHaveLength(3);
   });
 });

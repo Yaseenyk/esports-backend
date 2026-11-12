@@ -4,7 +4,9 @@ import { hashPassword, iterationsFrom, pwFingerprint, randomToken, sha256, signJ
 import { HttpError, nowIso, rateLimit, rateLimitSubject, readJson, str } from "../http";
 import { getMailer, resetLink, resetMail } from "../mailer";
 import { requireUser } from "../auth";
-import { afterUserDelete, handoverStatements, planOwnershipHandover } from "../ownership";
+import { afterUserDelete, handoverStatements, personalOrgId, planOrgExit, planOwnershipHandover, soloEvents, SOLO_CHUNK_THRESHOLD, SOLO_PER_REQUEST } from "../ownership";
+import { auditOff, auditStmts } from "../audit";
+import { eventDeleteStatements } from "./events";
 
 export const auth = new Hono<AppBindings>();
 
@@ -51,9 +53,14 @@ auth.post("/auth/register", async (c) => {
   const h = await hashPassword(pw, iterationsFrom(c.env));
   const user: UserRow = { id: crypto.randomUUID(), email: e, name, pw_hash: h.hash, pw_salt: h.salt, pw_iter: h.iterations, created_at: nowIso() };
   try {
-    await c.env.DB.prepare("INSERT INTO users (id, email, name, pw_hash, pw_salt, pw_iter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(user.id, user.email, user.name, user.pw_hash, user.pw_salt, user.pw_iter, user.created_at)
-      .run();
+    // Dual-write (blueprint 5.5): the account, its personal organisation and the admin membership commit together or not at all.
+    const orgId = personalOrgId(user.id);
+    await c.env.DB.batch([
+      c.env.DB.prepare("INSERT INTO users (id, email, name, pw_hash, pw_salt, pw_iter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(user.id, user.email, user.name, user.pw_hash, user.pw_salt, user.pw_iter, user.created_at),
+      c.env.DB.prepare("INSERT INTO organisations (id, name, kind, status, created_at) VALUES (?1, ?2, 'personal', 'active', ?3)").bind(orgId, `${user.name.slice(0, 60)}'s workspace`, user.created_at),
+      c.env.DB.prepare("INSERT INTO org_members (org_id, user_id, role, added_by, added_at) VALUES (?1, ?2, 'admin', ?2, ?3)").bind(orgId, user.id, user.created_at),
+    ]);
   } catch {
     throw new HttpError(409, "An account with this email already exists");
   }
@@ -107,6 +114,11 @@ auth.post("/auth/delete-account", requireUser, async (c) => {
   const pw = typeof body.password === "string" ? body.password : "";
   if (!u || !(await verifyPassword(pw, u.pw_hash, u.pw_salt, u.pw_iter))) throw new HttpError(401, "Password is wrong");
   if (body.deleteEvents !== undefined && typeof body.deleteEvents !== "boolean") throw new HttpError(400, "deleteEvents must be true or false");
+  // E2: the last admin of a club that other people or other people's events depend on cannot delete the account (nothing is changed).
+  const exit = await planOrgExit(c.env.DB, u.id);
+  if (exit.blocked.length) {
+    throw new HttpError(409, "You are the only admin of a club that other people use. Hand over the club first: make someone else an admin, then delete your account.", { code: "sole_owner", orgs: exit.blocked });
+  }
   const plan = await planOwnershipHandover(c.env.DB, u.id);
   if (plan.tooMany) {
     throw new HttpError(409, "You share more than 50 events with other organisers. Remove some co-organisers or delete some events first, then delete your account.", { code: "too_many_shared_events" });
@@ -127,8 +139,29 @@ auth.post("/auth/delete-account", requireUser, async (c) => {
       { code: "events_need_delete_confirmation", events: plan.needDeleteConfirmation.map((e) => ({ id: e.id, name: e.name })) },
     );
   }
+  // S1c (review N-14): above SOLO_CHUNK_THRESHOLD events that nobody can take over, delete them one event per batch BEFORE the final batch, so no single
+  // statement cascades through thousands of rows. All the refusals above happen first; this needs the typed count (at least the number that remain).
+  const solo = await soloEvents(c.env.DB, u.id, plan.handovers.map((h) => h.id));
+  if (solo.length > SOLO_CHUNK_THRESHOLD) {
+    const typed = body.confirmEventCount;
+    if (typeof typed !== "number" || !Number.isInteger(typed) || typed < solo.length) {
+      throw new HttpError(409, `Deleting your account will delete ${solo.length} events and everything in them. To go ahead, type the number of events (${solo.length}) to confirm.`, { code: "events_need_count_confirmation", eventCount: solo.length });
+    }
+    const chunk = solo.slice(0, SOLO_PER_REQUEST);
+    for (const e of chunk) await c.env.DB.batch(eventDeleteStatements(c.env.DB, e.id, u.id));
+    if (solo.length > chunk.length) {
+      throw new HttpError(409, `${chunk.length} of your events were deleted. ${solo.length - chunk.length} are left: send the same request again to continue. Your account is not deleted yet.`, { code: "deletion_continues", deleted: chunk.length, remaining: solo.length - chunk.length });
+    }
+  }
+  const off = await auditOff(c.env.DB);
   try {
-    await c.env.DB.batch([...handoverStatements(c.env.DB, u.id, plan.handovers), c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id), ...afterUserDelete(c.env.DB, u.id)]);
+    await c.env.DB.batch([
+      ...handoverStatements(c.env.DB, u.id, plan.handovers),
+      ...plan.handovers.flatMap((h) => auditStmts(c.env.DB, { action: "event.handed_over", actorType: "user", actorId: u.id, eventId: h.id, targetType: "event", targetId: h.id }, off)),
+      c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id),
+      ...auditStmts(c.env.DB, { action: "auth.account_deleted", actorType: "user", actorId: u.id }, off),
+      ...afterUserDelete(c.env.DB, u.id, exit.soleTeamOrgIds),
+    ]);
   } catch (e) {
     // A foreign key still points at the account (for example a stray event): the batch rolled back whole, so nothing was deleted (review N-15).
     if (/constraint|foreign key/i.test(e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? "")}` : String(e))) {

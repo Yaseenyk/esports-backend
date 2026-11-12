@@ -248,6 +248,8 @@ describe("org mode", () => {
     await setMode("org");
     const o = await newUser();
     const ev = await newEvent(o.token);
+    // create now fills org_id (dual-write); an event from an old Worker has none, and a read must not fill it
+    await db.prepare("UPDATE events SET org_id = NULL WHERE id = ?").bind(ev.id).run();
     const p = probe(o.id);
     await resolveEvent(p.c, ev.id);
     expect(p.sql.filter((q) => /^\s*(INSERT|UPDATE|DELETE)/i.test(q))).toEqual([]);

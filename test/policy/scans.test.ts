@@ -26,7 +26,8 @@ export const MY_ROLE_BASELINE: Record<string, number> = {
 
 /** Lines mentioning `owner_id` outside src/policy, per file (types.ts is the column definition; housekeeping is the invariants SQL). */
 export const OWNER_ID_BASELINE: Record<string, number> = {
-  "src/ownership.ts": 4,
+  // Phase 2a-i: ownership.ts is the one module that reasons about creators by design; E2 (planOrgExit), S1c (soloEvents) and the E1 seam add three lines. Raised once, reported.
+  "src/ownership.ts": 7,
   "src/types.ts": 1,
   "src/features/brand.ts": 8,
   "src/features/duplicate.ts": 3,

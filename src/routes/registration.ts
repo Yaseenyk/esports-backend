@@ -5,14 +5,15 @@ import { HttpError, nowIso, optBool, optStr, rateLimit, readJson, str } from "..
 import { ownedEvent, requireUser } from "../auth";
 import { takenDown } from "../moderation/takedown";
 import { killGate } from "../admin/kill";
+import { ACK_VERSION, acknowledgementOffer } from "../orgs/ack";
 
 export const registration = new Hono<AppBindings>();
 
-interface FormRow { event_id: string; token: string; token_hash: string | null; token_enc: string | null; title: string; intro: string; closes_at: string | null; max_teams: number | null; team_size: number; subs: number; open: number; created_at: string }
+interface FormRow { event_id: string; token: string; token_hash: string | null; token_enc: string | null; title: string; intro: string; closes_at: string | null; max_teams: number | null; team_size: number; subs: number; open: number; created_at: string; ack_version: string | null; ack_at: string | null }
 interface RegRow { id: string; event_id: string; team_name: string; captain_name: string; captain_contact: string; players: string; notes: string; status: string; created_at: string }
 interface Player { name: string; ign: string; minor: boolean }
 
-const publicForm = (f: FormRow, token: string) => ({ token, title: f.title, intro: f.intro, closesAt: f.closes_at, maxTeams: f.max_teams, teamSize: f.team_size, subs: f.subs, open: !!f.open, createdAt: f.created_at });
+const publicForm = (f: FormRow, token: string) => ({ token, title: f.title, intro: f.intro, closesAt: f.closes_at, maxTeams: f.max_teams, teamSize: f.team_size, subs: f.subs, open: !!f.open, createdAt: f.created_at, ackVersion: f.ack_version ?? null, ackAt: f.ack_at ?? null });
 const regOut = (r: RegRow) => ({ id: r.id, teamName: r.team_name, captainName: r.captain_name, captainContact: r.captain_contact, players: JSON.parse(r.players) as Player[], notes: r.notes, status: r.status, createdAt: r.created_at });
 
 function int(v: unknown, field: string, min: number, max: number): number {
@@ -38,13 +39,20 @@ registration.put("/events/:id/registration", requireUser, async (c) => {
   const teamSize = b.teamSize === undefined ? (cur?.team_size ?? 4) : int(b.teamSize, "teamSize", 1, 20);
   const subs = b.subs === undefined ? (cur?.subs ?? 1) : int(b.subs, "subs", 0, 10);
   const open = b.open === undefined ? (cur ? !!cur.open : true) : optBool(b.open, "open");
+  // Privacy minimum: a form cannot be open (published) until the organiser has ticked the acknowledgement of the CURRENT text version.
+  if (b.acknowledge !== undefined && typeof b.acknowledge !== "boolean") throw new HttpError(400, "acknowledge must be true or false");
+  const acked = cur?.ack_at != null && cur.ack_version === ACK_VERSION;
+  const ackNow = b.acknowledge === true;
+  if (open && !acked && !ackNow) throw new HttpError(400, "Read and tick the acknowledgement before you open this form", { code: "acknowledgement_required", acknowledgement: acknowledgementOffer() });
+  const ackVersion = ackNow ? ACK_VERSION : (cur?.ack_version ?? null);
+  const ackAt = ackNow && !acked ? nowIso() : (cur?.ack_at ?? null);
   if (cur) {
-    await db.prepare("UPDATE registration_forms SET title = ?, intro = ?, closes_at = ?, max_teams = ?, team_size = ?, subs = ?, open = ? WHERE event_id = ?")
-      .bind(title, intro, closes, maxTeams, teamSize, subs, open ? 1 : 0, ev.id).run();
+    await db.prepare("UPDATE registration_forms SET title = ?, intro = ?, closes_at = ?, max_teams = ?, team_size = ?, subs = ?, open = ?, ack_version = ?, ack_at = ? WHERE event_id = ?")
+      .bind(title, intro, closes, maxTeams, teamSize, subs, open ? 1 : 0, ackVersion, ackAt, ev.id).run();
   } else {
     const { cols } = await newLink(c.env, "regform", ev.id);
-    await db.prepare("INSERT INTO registration_forms (event_id, token, token_hash, token_enc, title, intro, closes_at, max_teams, team_size, subs, open, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(ev.id, cols.token, cols.token_hash, cols.token_enc, title, intro, closes, maxTeams, teamSize, subs, open ? 1 : 0, nowIso()).run();
+    await db.prepare("INSERT INTO registration_forms (event_id, token, token_hash, token_enc, title, intro, closes_at, max_teams, team_size, subs, open, created_at, ack_version, ack_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(ev.id, cols.token, cols.token_hash, cols.token_enc, title, intro, closes, maxTeams, teamSize, subs, open ? 1 : 0, nowIso(), ackVersion, ackAt).run();
   }
   const f = await db.prepare("SELECT * FROM registration_forms WHERE event_id = ?").bind(ev.id).first<FormRow>();
   return c.json(publicForm(f!, await revealToken(c.env, "regform", ev.id, f!)), cur ? 200 : 201);
@@ -56,7 +64,7 @@ registration.get("/events/:id/registration", requireUser, async (c) => {
   const f = await db.prepare("SELECT * FROM registration_forms WHERE event_id = ?").bind(ev.id).first<FormRow>();
   const counts = await db.prepare("SELECT status, COUNT(*) AS n FROM registrations WHERE event_id = ? GROUP BY status").bind(ev.id).all<{ status: string; n: number }>();
   const by = Object.fromEntries(counts.results.map((r) => [r.status, r.n]));
-  return c.json({ form: f ? publicForm(f, ev.my_role === "viewer" ? "" : await revealToken(c.env, "regform", ev.id, f)) : null, counts: { pending: by.pending ?? 0, approved: by.approved ?? 0, rejected: by.rejected ?? 0 } });
+  return c.json({ form: f ? publicForm(f, ev.my_role === "viewer" ? "" : await revealToken(c.env, "regform", ev.id, f)) : null, acknowledgement: acknowledgementOffer(), counts: { pending: by.pending ?? 0, approved: by.approved ?? 0, rejected: by.rejected ?? 0 } });
 });
 
 registration.get("/events/:id/registrations", requireUser, async (c) => {

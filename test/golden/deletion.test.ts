@@ -41,7 +41,7 @@ async function fullEvent(name = "Full Cup") {
   const inv = (await call(`/events/${ev}/invites`, { token: t, body: { teamId: "t1" } })).json;
   await call(`/public/invite/${inv.token}/submit`, { body: { name: "Sub Mitter" } });
   await call(`/events/${ev}/people/ALP-001/share`, { token: t, body: {} });
-  const form = (await call(`/events/${ev}/registration`, { method: "PUT", token: t, body: { title: "Reg", teamSize: 1, subs: 0 } })).json;
+  const form = (await call(`/events/${ev}/registration`, { method: "PUT", token: t, body: { acknowledge: true, title: "Reg", teamSize: 1, subs: 0 } })).json;
   await call(`/public/registration/${form.token}/submit`, { body: { teamName: "Reg Team", captainName: "Cap Tain", captainContact: "cap@example.com", players: [{ name: "P One" }] } });
   const live = await call(`/events/${ev}/live`, { method: "PUT", token: t, body: { published: true, snapshot: { views: [], announcements: [], sponsors: [], ticker: [] } } });
   await call(`/public/hit/${live.json.slug}`, { body: { source: "live" } });

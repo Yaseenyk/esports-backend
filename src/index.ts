@@ -18,6 +18,7 @@ import { verify } from "./routes/verify";
 import { track } from "./routes/track";
 import { admin } from "./admin/routes";
 import { publicReports } from "./moderation/public-reports";
+import { orgs } from "./orgs/routes";
 
 const app = new Hono<AppBindings>();
 
@@ -64,6 +65,7 @@ app.route("/", verify);
 app.route("/", track);
 app.route("/", admin); // Phase 1: /admin/v1 (staff; 404 for everyone else)
 app.route("/", publicReports);
+app.route("/", orgs); // Phase 2a-i: /me/context, /me/export, and the /orgs routes (404 unless flag orgs.team is on)
 mountFeatures(app);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));

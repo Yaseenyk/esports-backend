@@ -61,7 +61,7 @@ async function passFixture(suffix: string): Promise<Fixture> {
 }
 async function registrationFixture() {
   const o = await setupEvent("Reg Cup");
-  const form = (await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { title: "Reg", teamSize: 1, subs: 0 } })).json;
+  const form = (await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Reg", teamSize: 1, subs: 0 } })).json;
   return { ev: o.ev.id, token: form.token as string };
 }
 async function inviteFixture() {

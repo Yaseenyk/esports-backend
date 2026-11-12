@@ -57,6 +57,10 @@ export const ACCOUNT: { method: string; path: string; body?: unknown }[] = [
   { method: "POST", path: "/me/email/verify", body: { token: "x" } },
   { method: "POST", path: "/auth/change-password", body: { current: "x", next: "yyyyyyyy" } },
   { method: "POST", path: "/auth/delete-account", body: { password: "x" } },
+  // Phase 2a-i: always on, user token only (the /orgs routes are behind flag orgs.team and live in test/features/orgs.routes.ts)
+  { method: "GET", path: "/me/context" },
+  { method: "POST", path: "/me/export" },
+  { method: "GET", path: "/me/deletion-preview" },
   // brand kit and team profiles belong to the signed-in user, not to an event
   { method: "GET", path: "/brand" },
   { method: "PUT", path: "/brand", body: { name: "x", primaryColor: "#0a84ff", secondaryColor: "#7c3aed" } },
@@ -102,7 +106,7 @@ export async function world() {
   const inv = (await call(`/events/${ev}/invites`, { token: o.token, body: { teamId: "t1" } })).json;
   const sub = await call(`/public/invite/${inv.token}/submit`, { body: { name: "Sub Mitter", photo: pngDataUrl() } });
   const sid = sub.json.id as string;
-  const form = (await call(`/events/${ev}/registration`, { method: "PUT", token: o.token, body: { title: "Reg", teamSize: 1, subs: 0 } })).json;
+  const form = (await call(`/events/${ev}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Reg", teamSize: 1, subs: 0 } })).json;
   const reg = await call(`/public/registration/${form.token}/submit`, { body: { teamName: `Team ${uniq()}`, captainName: "Cap Tain", captainContact: "cap@example.com", players: [{ name: "P One" }] } });
   const editor = await newUser("Ed");
   const viewer = await newUser("Vi");

@@ -318,7 +318,7 @@ describe("registration (public)", () => {
   async function form(over: object = {}) {
     const u = await newUser();
     const ev = await newEvent(u.token, "Public Cup");
-    const f = await call(`/events/${ev.id}/registration`, { method: "PUT", token: u.token, body: { title: "T", teamSize: 2, subs: 1, ...over } });
+    const f = await call(`/events/${ev.id}/registration`, { method: "PUT", token: u.token, body: { acknowledge: true, title: "T", teamSize: 2, subs: 1, ...over } });
     return { u, ev, token: f.json.token as string };
   }
   const sub = (name: string, n = 2, extra: object = {}) => ({ teamName: name, captainName: "Asha", captainContact: "9999900000", players: players(n), ...extra });

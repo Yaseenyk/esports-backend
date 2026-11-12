@@ -12,7 +12,7 @@ const list = (q = "", headers: Record<string, string> = {}) => call(`/public/dir
 
 async function listed(over: Record<string, unknown> = {}) {
   const o = await setupEvent("Dir Cup");
-  expect((await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { title: "Reg" } })).status).toBe(201);
+  expect((await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Reg" } })).status).toBe(201);
   const r = await put(o.ev.id, o.token, good(over));
   expect(r.status).toBe(200);
   return o;
@@ -22,7 +22,7 @@ describe("directory, owner side", () => {
   it("needs a registration page before listing, and builds the link on the server", async () => {
     const o = await setupEvent("Dir Cup");
     expect((await put(o.ev.id, o.token, good())).status).toBe(409);
-    const form = await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { title: "Reg" } });
+    const form = await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Reg" } });
     const r = await put(o.ev.id, o.token, good({ regLink: "https://evil.example/x" }));
     expect(r.status).toBe(200);
     const pub = await list("?game=BGMI");

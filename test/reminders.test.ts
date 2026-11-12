@@ -19,7 +19,7 @@ const players = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `Pla
 async function setup() {
   const u = await newUser();
   const ev = await newEvent(u.token, "Spring Cup");
-  const form = await call(`/events/${ev.id}/registration`, { method: "PUT", token: u.token, body: { title: "Spring", teamSize: 4, subs: 0, maxTeams: 100 } });
+  const form = await call(`/events/${ev.id}/registration`, { method: "PUT", token: u.token, body: { acknowledge: true, title: "Spring", teamSize: 4, subs: 0, maxTeams: 100 } });
   return { u, ev, token: form.json.token as string };
 }
 const register = (token: string, name: string, extra: Record<string, unknown> = {}) =>

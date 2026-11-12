@@ -5,7 +5,7 @@ import { randomToken } from "../crypto";
 import { newLink } from "../links";
 import { HttpError, nowIso, optStr, rateLimitSubject, readJson, str } from "../http";
 import { accessibleEvent, requireUser } from "../auth";
-import { publicEvent, slugify, strictIsoDate } from "../routes/events";
+import { chooseOrg, publicEvent, slugify, strictIsoDate } from "../routes/events";
 import { listMatches, MAX_MATCHES } from "../matches";
 
 /**
@@ -49,9 +49,9 @@ function parseInclude(v: unknown): Record<(typeof KEYS)[number], boolean> {
   return out;
 }
 
-async function uniqueSlug(db: D1Database, ownerId: string, name: string): Promise<string> {
+async function uniqueSlug(db: D1Database, ownerId: string, name: string, teamOrgId: string | null): Promise<string> {
   const base = slugify(name);
-  const rows = await db.prepare("SELECT slug FROM events WHERE owner_id = ? AND (slug = ? OR slug LIKE ?)").bind(ownerId, base, `${base.slice(0, 20)}-%`).all<{ slug: string }>();
+  const rows = await db.prepare("SELECT slug FROM events WHERE (owner_id = ?1 OR org_id = ?2) AND (slug = ?3 OR slug LIKE ?4)").bind(ownerId, teamOrgId, base, `${base.slice(0, 20)}-%`).all<{ slug: string }>();
   const taken = new Set(rows.results.map((r) => r.slug));
   if (!taken.has(base)) return base;
   for (let n = 2; n < 10000; n++) {
@@ -86,9 +86,11 @@ routes.post("/events/:id/duplicate", requireUser, async (c) => {
   const now = nowIso();
   const newId = crypto.randomUUID();
   const stmts: D1PreparedStatement[] = [];
+  // Dual-write: org_id (NULL when the organisation row does not exist yet, never a foreign key failure) and created_by, in the same statement as the event.
+  const target = await chooseOrg(c, b, src.org_id ?? null);
   stmts.push(
-    db.prepare("INSERT INTO events (id, owner_id, slug, name, game, organiser, date, starts_on, venue, emergency, rules, settings, signing_secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(newId, uid, await uniqueSlug(db, uid, name), name, src.game, src.organiser, date, strictIsoDate(date), src.venue, src.emergency, src.rules, src.settings, randomToken(32), now, now),
+    db.prepare("INSERT INTO events (id, owner_id, slug, name, game, organiser, date, starts_on, venue, emergency, rules, settings, signing_secret, created_at, updated_at, org_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM organisations WHERE id = ?), ?)")
+      .bind(newId, uid, await uniqueSlug(db, uid, name, target.teamOrgId), name, src.game, src.organiser, date, strictIsoDate(date), src.venue, src.emergency, src.rules, src.settings, randomToken(32), now, now, target.orgId, uid),
   );
 
   if (inc.teams) {

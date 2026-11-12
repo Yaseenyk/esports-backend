@@ -8,7 +8,7 @@ const body = (name: string, n = 4) => ({ teamName: name, captainName: "Asha Capt
 async function setup() {
   const u = await newUser();
   const ev = await newEvent(u.token, "Spring Cup");
-  const form = await call(`/events/${ev.id}/registration`, { method: "PUT", token: u.token, body: { title: "Spring Cup registration", teamSize: 4, subs: 1, maxTeams: 2 } });
+  const form = await call(`/events/${ev.id}/registration`, { method: "PUT", token: u.token, body: { acknowledge: true, title: "Spring Cup registration", teamSize: 4, subs: 1, maxTeams: 2 } });
   return { u, ev, form };
 }
 

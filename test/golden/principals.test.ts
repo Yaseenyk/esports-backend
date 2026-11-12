@@ -44,7 +44,7 @@ describe("golden: token principals reach only their own event", () => {
 
   it("registration form", async () => {
     const { a, b } = await twoEvents();
-    const form = (await call(`/events/${a.ev.id}/registration`, { method: "PUT", token: a.token, body: { title: "Reg", teamSize: 1, subs: 0 } })).json;
+    const form = (await call(`/events/${a.ev.id}/registration`, { method: "PUT", token: a.token, body: { acknowledge: true, title: "Reg", teamSize: 1, subs: 0 } })).json;
     const r = await call(`/public/registration/${form.token}`);
     expect(r.status).toBe(200);
     onlyA(r.text);

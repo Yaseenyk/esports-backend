@@ -50,12 +50,9 @@ describe("housekeeping", () => {
       env.DB.prepare("INSERT INTO password_resets (id, user_id, token_hash, created_at, expires_at, used_at) VALUES ('p-old', ?1, 'h3', 'x', ?2, NULL)").bind(ids.alice, old),
       env.DB.prepare("INSERT INTO password_resets (id, user_id, token_hash, created_at, expires_at, used_at) VALUES ('p-new', ?1, 'h4', 'x', ?2, NULL)").bind(ids.alice, fresh),
     ]);
-    // invitations arrive in Phase 2a; the housekeeping must already handle them (DDL copied from blueprint 15.4)
-    await env.DB.prepare(
-      "CREATE TABLE invitations (id TEXT PRIMARY KEY, org_id TEXT REFERENCES organisations(id) ON DELETE CASCADE, event_id TEXT REFERENCES events(id) ON DELETE CASCADE, role TEXT NOT NULL, email TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, invited_by TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, accepted_at TEXT, revoked_at TEXT)",
-    ).run();
+    // the invitations table is migration 0045 (applyAll above); the housekeeping purges spent and long-expired rows
     const inv = (id: string, exp: string, acc: string | null, rev: string | null) =>
-      env.DB.prepare("INSERT INTO invitations (id, org_id, role, email, token_hash, invited_by, created_at, expires_at, accepted_at, revoked_at) VALUES (?1, ?2, 'member', 'a@b.c', ?3, 'x', 'x', ?4, ?5, ?6)").bind(id, `org-${ids.alice}`, `th-${id}`, exp, acc, rev);
+      env.DB.prepare("INSERT INTO invitations (id, org_id, role, email, token_hash, invited_by, created_at, expires_at, accepted_at, revoked_at) VALUES (?1, ?2, 'member', ?7, ?3, 'x', 'x', ?4, ?5, ?6)").bind(id, `org-${ids.alice}`, `th-${id}`, exp, acc, rev, `${id}@b.c`);
     await env.DB.batch([
       inv("i-open", fresh, null, null),
       inv("i-expired-recent", iso(NOW - 2 * 86_400_000), null, null), // expired 2 days ago: kept (14-day rule)

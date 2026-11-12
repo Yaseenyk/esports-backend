@@ -80,7 +80,9 @@ const audienceKinds = (a: Audience): [string, string] => (a === "organiser" ? ["
 /** Brings reminder_recipients in line with who is currently an organiser (owner, editors) and which captains agreed. Unsubscribes are kept. */
 export async function syncRecipients(env: Env, eventId: string): Promise<void> {
   const db = env.DB;
-  const org = await db.prepare("SELECT u.email AS email FROM events e JOIN users u ON u.id = e.owner_id WHERE e.id = ?1 UNION SELECT u.email FROM event_members m JOIN users u ON u.id = m.user_id WHERE m.event_id = ?1 AND m.role = 'editor'").bind(eventId).all<{ email: string }>();
+  // OD-AA: organiser copies go to the club's admins, to the creator while they still belong to the club (or when the event has no club), and to editor guests.
+  // A removed member (a creator who left or was removed) is none of these, so they stop receiving mail about an event they can no longer open.
+  const org = await db.prepare("SELECT u.email AS email FROM events e JOIN users u ON u.id = e.owner_id WHERE e.id = ?1 AND (e.org_id IS NULL OR NOT EXISTS (SELECT 1 FROM organisations o WHERE o.id = e.org_id) OR EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = e.org_id AND x.user_id = e.owner_id)) UNION SELECT u.email FROM events e JOIN org_members a ON a.org_id = e.org_id AND a.role = 'admin' JOIN users u ON u.id = a.user_id WHERE e.id = ?1 UNION SELECT u.email FROM event_members m JOIN users u ON u.id = m.user_id WHERE m.event_id = ?1 AND m.role = 'editor'").bind(eventId).all<{ email: string }>();
   const caps = await db.prepare("SELECT captain_email AS email, MIN(email_consent_at) AS at FROM registrations WHERE event_id = ? AND status != 'rejected' AND captain_email IS NOT NULL AND captain_email != '' AND email_consent_at IS NOT NULL GROUP BY captain_email").bind(eventId).all<{ email: string; at: string }>();
   const want = new Map<string, { email: string; kind: "organiser" | "captain"; at: string }>();
   const now = nowIso();

@@ -39,7 +39,7 @@ describe("view-only members cannot read credentials", () => {
     await call(`/events/${ev}/members`, { token: o.token, body: { email: viewer.email, role: "viewer" } });
     await call(`/events/${ev}/members`, { token: o.token, body: { email: editor.email, role: "editor" } });
     const inv = (await call(`/events/${ev}/invites`, { token: o.token, body: { teamId: "t1" } })).json;
-    const form = (await call(`/events/${ev}/registration`, { method: "PUT", token: o.token, body: { title: "Reg" } })).json;
+    const form = (await call(`/events/${ev}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Reg" } })).json;
     expect(inv.token && form.token).toBeTruthy();
 
     for (const t of [o.token, editor.token]) {

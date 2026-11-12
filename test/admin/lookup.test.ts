@@ -17,8 +17,8 @@ describe("lookup: metadata only, response key snapshot", () => {
     // a roster with a minor and a photo: counts may show, content must not
     const put = await call(`/events/${ev.id}/roster`, { method: "PUT", token: owner.token, body: { ...basicRoster(), people: basicRoster().people.map((p) => ({ ...p, photo: p.photo ?? pngDataUrl() })) } });
     expect(put.status).toBe(200);
-    await db.prepare("INSERT INTO organisations (id, name, kind, status, created_at) VALUES (?1, 'Org Name Private', 'team', 'active', ?2)").bind(`org-${owner.id}`, new Date().toISOString()).run();
-    await db.prepare("INSERT INTO org_members (org_id, user_id, role, added_at) VALUES (?1, ?2, 'admin', ?3)").bind(`org-${owner.id}`, owner.id, new Date().toISOString()).run();
+    // registering already created the personal organisation and the admin membership (dual-write): turn it into a named club
+    await db.prepare("UPDATE organisations SET name = 'Org Name Private', kind = 'team' WHERE id = ?1").bind(`org-${owner.id}`).run();
 
     const byEmail = await api(`/admin/v1/lookup?email=${encodeURIComponent(owner.email.toUpperCase())}`, { token });
     expect(byEmail.status).toBe(200);

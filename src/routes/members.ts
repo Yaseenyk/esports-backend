@@ -3,6 +3,8 @@ import type { AppBindings } from "../types";
 import { HttpError, nowIso, rateLimit, readJson, str } from "../http";
 import { ownerEvent, requireUser } from "../auth";
 import { normEmail } from "./auth";
+import { teamOrgsOn } from "../orgs/access";
+import { createEventInvitation } from "../orgs/invitations";
 
 export const members = new Hono<AppBindings>();
 
@@ -24,6 +26,9 @@ members.post("/events/:id/members", requireUser, async (c) => {
   const ev = await ownerEvent(c, c.req.param("id"));
   await rateLimit(c, "members", 30, 3600);
   const b = await readJson(c);
+  // Phase 2a: with flag orgs.team on, adding a guest creates a pending invitation (copy link, accepted with a verified matching email). The answer is the same
+  // whether or not an account exists for the address, so this route no longer reveals who has an account. With the flag off nothing changes.
+  if (await teamOrgsOn(c.env.DB)) return createEventInvitation(c, ev.id, ev.org_id ?? null, b.email, b.role);
   const email = normEmail(str(b.email, "email", 3, 254));
   if (b.role !== "editor" && b.role !== "viewer") throw new HttpError(400, "role must be editor or viewer");
   const user = await c.env.DB.prepare("SELECT id, name, email FROM users WHERE email = ?").bind(email).first<{ id: string; name: string; email: string }>();

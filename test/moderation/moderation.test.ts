@@ -91,7 +91,7 @@ describe("public report route", () => {
     const team = await teamPage();
     const pass = await passLink(l.ev.id);
     const cap = await captainLink(l.ev.id);
-    const form = await call(`/events/${l.ev.id}/registration`, { method: "PUT", token: l.token, body: { title: "Reg" } });
+    const form = await call(`/events/${l.ev.id}/registration`, { method: "PUT", token: l.token, body: { acknowledge: true, title: "Reg" } });
     expect(form.status).toBe(201);
     await directoryEntry(l.ev.id);
     const cases: [string, string, string, string][] = [

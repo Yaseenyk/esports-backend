@@ -199,7 +199,7 @@ describe("live page, public side", () => {
   it("leaks nothing about people, passes, keys, registrations or the owner", async () => {
     const o = await setupEvent("Leak Cup");
     const key = (await call(`/events/${o.ev.id}/gate-keys`, { token: o.token, body: { label: "Door" } })).json;
-    const form = (await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { title: "Reg", teamSize: 1, subs: 0 } })).json;
+    const form = (await call(`/events/${o.ev.id}/registration`, { method: "PUT", token: o.token, body: { acknowledge: true, title: "Reg", teamSize: 1, subs: 0 } })).json;
     const secret = (await env.DB.prepare("SELECT signing_secret FROM events WHERE id = ?").bind(o.ev.id).first<{ signing_secret: string }>())!.signing_secret;
     const slug = (await put(o.ev.id, o.token, { published: true, snapshot: snap() })).json.slug as string;
     const r = await call(`/public/live/${slug}`);
