@@ -250,6 +250,18 @@ describe("public reads", () => {
     await allV3On();
   });
 
+  it("the sign-up form closes when the tournament closes registration", async () => {
+    const t = await tournament({}, "registration_open");
+    const f = await call(`/events/${t.eventId}/registration`, { method: "PUT", token: t.owner.token, body: { open: true, acknowledge: true, teamSize: 1, subs: 0 } });
+    expect(f.status).toBe(201);
+    const sub = (team: string) => call(`/public/registration/${f.json.token}/submit`, { body: { teamName: team, captainName: "Cap Tain", captainContact: "cap@example.test", players: [{ name: "P One" }] } });
+    expect((await sub("Early Team")).status).toBe(201);
+    expect((await call(`/public/registration/${f.json.token}`)).json.form.status).toBe("open");
+    expect((await api(`/v3/events/${t.eventId}/tournament/status`, { token: t.owner.token, body: { to: "registration_closed" } })).status).toBe(200);
+    expect((await call(`/public/registration/${f.json.token}`)).json.form.status).toBe("closed");
+    expect((await sub("Late Team")).status).toBe(409);
+  });
+
   it("live endpoint: count and status only", async () => {
     const t = await tournament({ maxTeams: 4 }, "registration_open");
     await addRegistration(t.eventId, "One");

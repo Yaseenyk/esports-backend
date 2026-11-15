@@ -135,7 +135,10 @@ async function openForm(c: Parameters<typeof ownedEvent>[0], token: string) {
   if (!row || !(await verifyPresented(token, row))) throw new HttpError(404, "Not found");
   if (await takenDown(db, { type: "registration_form", id: row.event_id, eventId: row.event_id })) throw new HttpError(404, "Not found");
   const taken = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM registrations WHERE event_id = ? AND status != 'rejected'").bind(row.event_id).first<{ n: number }>();
-  const closed = !row.open || (row.closes_at !== null && Date.parse(row.closes_at) < Date.now());
+  // A tournament page on this event that has closed registration (or moved on) closes the sign-up form too, so the two never disagree.
+  const tour = await db.prepare("SELECT status FROM tournaments WHERE event_id = ?").bind(row.event_id).first<{ status: string }>();
+  const tourClosed = !!tour && ["registration_closed", "live", "completed", "cancelled"].includes(tour.status);
+  const closed = !row.open || tourClosed || (row.closes_at !== null && Date.parse(row.closes_at) < Date.now());
   const full = row.max_teams !== null && (taken?.n ?? 0) >= row.max_teams;
   return { row, taken: taken?.n ?? 0, status: closed ? ("closed" as const) : full ? ("full" as const) : ("open" as const) };
 }
