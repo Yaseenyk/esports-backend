@@ -22,6 +22,7 @@ export interface Flags {
   "kill.mail": boolean;
   "kill.tracking": boolean;
   "kill.public_writes": boolean;
+  "kill.feedback": boolean; // stops POST /feedback and its attachments (503) and hides the widget (GET /feedback/status 404); withdrawing still works
   "admin.enabled": boolean;
   "takedown.enforce": boolean;
   "auth.verify_required": boolean; // new password sign-ups must confirm their email (users.verify_required is set at sign-up while this is on)
@@ -31,6 +32,7 @@ export interface Flags {
   "v3.lft": boolean;
   "v3.disputes": boolean;
   "v3.discord": boolean; // Discord automation (stage 3): install flow, /link, interactions endpoint, outbox drain
+  "feedback.enabled": boolean; // on-page feedback bot (migration 0054): /feedback routes and the staff list. OFF = 404 before any feedback table is read
 }
 
 export type FlagKey = keyof Flags;
@@ -47,6 +49,7 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "kill.mail": false,
   "kill.tracking": false,
   "kill.public_writes": false,
+  "kill.feedback": false,
   "admin.enabled": false,
   "takedown.enforce": false,
   "auth.verify_required": false,
@@ -55,6 +58,7 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "v3.lft": false,
   "v3.disputes": false,
   "v3.discord": false,
+  "feedback.enabled": false,
 });
 
 export const FLAG_CACHE_MS = 10_000;

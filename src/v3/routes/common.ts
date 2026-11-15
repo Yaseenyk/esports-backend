@@ -11,7 +11,7 @@ export type V3Flag = Extract<FlagKey, `v3.${string}`>;
  * Flag gate. With every listed flag OFF the answer is the router's own notFound, byte for byte the answer of an unknown route, and NO v3 table has been
  * touched (only the legacy `flags` table is read; a missing flags table means defaults = OFF). Mount it BEFORE sign-in.
  */
-export const flagGate = (...keys: V3Flag[]): MiddlewareHandler<AppBindings> => async (c, next) => {
+export const flagGate = (...keys: (V3Flag | "feedback.enabled")[]): MiddlewareHandler<AppBindings> => async (c, next) => {
   const flags = await getFlags(c.env.DB);
   if (!keys.some((k) => flags[k])) return c.notFound();
   await next();

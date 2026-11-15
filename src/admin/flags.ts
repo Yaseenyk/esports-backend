@@ -5,7 +5,7 @@
  *  PUT /admin/v1/flags/:key      { value: boolean, reasonCode } for the settable keys. `kill.*` needs a step-up code; every change is audited in the
  *                                same batch as the write (`admin.flag_set`, one row per CHANGE; setting the value a key already has writes nothing).
  *
- * Settable by staff: the seven `kill.*`, `shed.tracking`, `takedown.enforce`. NOT settable here (runbook SQL only): `authz.mode`, `orgs.team`,
+ * Settable by staff: the eight `kill.*`, `shed.tracking`, `takedown.enforce`. NOT settable here (runbook SQL only): `authz.mode`, `orgs.team`,
  * `audit.off`, `admin.enabled` (a staff API that can switch itself off or the audit log off is not a safe design).
  */
 import { Hono } from "hono";

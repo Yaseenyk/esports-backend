@@ -83,3 +83,39 @@ describe("v3 Trinity layering", () => {
     }
   });
 });
+
+describe("feedback bot module layering", () => {
+  const f = (p: string) => v3.find((x) => x.path === p);
+  const FILES = [
+    "src/v3/routes/feedback.ts", "src/v3/routes/feedback-admin.ts", "src/v3/services/feedback-service.ts", "src/v3/services/feedback-admin-service.ts",
+    "src/v3/repositories/feedback-repo.ts", "src/v3/adapters/feedback-adapter.ts", "src/v3/lib/feedback.ts",
+  ];
+  it("has one file per layer", () => {
+    for (const p of FILES) expect(f(p), p).toBeDefined();
+  });
+  it("routes reach data only through services; services reach SQL only through the repository", () => {
+    for (const p of ["src/v3/routes/feedback.ts", "src/v3/routes/feedback-admin.ts"]) {
+      for (const i of importsOf(f(p)!.text)) expect(i, `${p} imports ${i}`).not.toMatch(/repositories\/|adapters\/|drizzle|schema|\/db\/|images/);
+    }
+    for (const p of ["src/v3/services/feedback-service.ts", "src/v3/services/feedback-admin-service.ts"]) {
+      expect(importsOf(f(p)!.text).some((i) => /repositories\/feedback-repo/.test(i)), p).toBe(true);
+      expect(f(p)!.text, p).not.toMatch(/\.prepare\(|\.batch\(/);
+    }
+  });
+  it("only the feedback and retention/account services and the repository name the feedback tables", () => {
+    for (const x of all) {
+      if (/^src\/v3\/repositories\/feedback-repo\.ts$/.test(x.path) || x.path === "src/v3/db/schema.ts") continue;
+      expect(x.text, x.path).not.toMatch(/\bfeedback_(reports|attachments|attachment_blobs)\b/);
+    }
+  });
+  it("the pure lib and the adapter hold no SQL and import no layer; the adapter never mentions ip_hash or bytes", () => {
+    for (const p of ["src/v3/lib/feedback.ts", "src/v3/adapters/feedback-adapter.ts"]) {
+      expect(f(p)!.text, p).not.toMatch(/\.prepare\(|\bSELECT\s+\S|\bINSERT\s+INTO/);
+      expect(f(p)!.text, p).not.toMatch(/\br\.ip_hash|\br\.attach_token|\.data\b/);
+    }
+  });
+  it("the staff routes live behind the /admin/v1 door (mounted in src/admin/routes.ts) and the public routes in v3/routes/index.ts", () => {
+    expect(all.find((x) => x.path === "src/admin/routes.ts")!.text).toContain("feedbackAdminRoutes");
+    expect(f("src/v3/routes/index.ts")!.text).toContain("feedbackRoutes");
+  });
+});

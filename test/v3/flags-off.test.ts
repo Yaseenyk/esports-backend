@@ -4,7 +4,7 @@ import app from "../../src/index";
 import { FLAG_DEFAULTS } from "../../src/flags";
 import { api, flagsOn, user } from "./helpers";
 
-const V3_TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "v3_registration_discord", "discord_link_codes", "v3_discord_settings"];
+const V3_TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "v3_registration_discord", "discord_link_codes", "v3_discord_settings", "feedback_reports", "feedback_attachments", "feedback_attachment_blobs"];
 
 /** An env whose DB records every statement it is asked to prepare. */
 function spyEnv() {
@@ -25,6 +25,25 @@ const v3Routes = () => [...new Map(app.routes.filter((r) => r.method !== "ALL" &
 describe("v3 flags default OFF and a v3 route then answers 404 before any v3 table is touched", () => {
   it("the five flags exist, default false", () => {
     for (const k of ["v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.discord"] as const) expect(FLAG_DEFAULTS[k], k).toBe(false);
+  });
+
+  it("feedback.enabled and kill.feedback exist, default false", () => {
+    expect(FLAG_DEFAULTS["feedback.enabled"]).toBe(false);
+    expect(FLAG_DEFAULTS["kill.feedback"]).toBe(false);
+  });
+
+  it("every /feedback route answers the unknown-route 404 with the flag off and never prepares SQL on a feedback table", async () => {
+    await flagsOn();
+    const unknown = await api("/v3/definitely-not-a-route");
+    const routes = [...new Map(app.routes.filter((r) => r.method !== "ALL" && r.path.startsWith("/feedback")).map((r) => [`${r.method} ${r.path}`, r])).values()];
+    expect(routes.length).toBeGreaterThanOrEqual(4);
+    for (const r of routes) {
+      const spy = spyEnv();
+      const res = await api(r.path.replace(/:[A-Za-z]+/g, "x1"), { method: r.method, body: r.method === "POST" ? {} : undefined, headers: { "x-attach-token": "t" }, env: spy.env });
+      expect(res.status, `${r.method} ${r.path}`).toBe(404);
+      expect(res.json).toEqual(unknown.json);
+      for (const q of spy.sql) expect(q, `${r.method} ${r.path}`).not.toMatch(/feedback_/);
+    }
   });
 
   it("there are v3 routes to test", () => expect(v3Routes().length).toBeGreaterThanOrEqual(35));

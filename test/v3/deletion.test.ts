@@ -2,12 +2,13 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { uniq } from "../helpers";
 import { lftReporterHash } from "../../src/v3/lib/reporter";
+import { resetFlagsCache } from "../../src/flags";
 import { allV3On, api, db, disputeWorld, flagsOn, nowSec, PNG, user } from "./helpers";
 
 vi.setConfig({ testTimeout: 120_000 });
 beforeAll(allV3On);
 
-const TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox"];
+const TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "feedback_reports", "feedback_attachments", "feedback_attachment_blobs"];
 const dump = async (t: string) => JSON.stringify((await db.prepare(`SELECT * FROM ${t}`).all()).results);
 
 describe("account deletion covers every v3 table", () => {
@@ -48,6 +49,17 @@ describe("account deletion covers every v3 table", () => {
     await db.prepare("INSERT INTO discord_guilds (guild_id, installed_by_user_id, permissions_ok, installed_at) VALUES ('guild1', ?1, 1, ?2)").bind(me.id, nowSec()).run();
     await db.prepare("INSERT INTO discord_outbox (id, kind, guild_id, payload, idempotency_key) VALUES ('job1', 'create_team_channel', 'guild1', '{}', 'k1')").run();
 
+    // feedback bot: one report linked to my account (with a contact, a screenshot and my marker), one of the other user that must survive
+    await db.prepare("INSERT INTO flags (key, value, updated_by, updated_at, note) VALUES ('feedback.enabled', 'true', 'test', ?1, '') ON CONFLICT (key) DO UPDATE SET value = 'true'").bind(new Date().toISOString()).run();
+    resetFlagsCache();
+    const fbBody = (m: string) => ({ kind: "bug", message: `${m} the page broke when I pressed save`, page: { path: "/tools/" }, client: { viewport: { w: 400, h: 800 } }, consent: true, consentVersion: "feedback-v1", website: "", includeAccount: true, contact: `${m}@example.com` });
+    const fbMine = await api("/feedback", { token: me.token, body: fbBody(mark) });
+    expect(fbMine.status, fbMine.text).toBe(201);
+    const fbShot = await api(`/feedback/${fbMine.json.id}/attachments`, { raw: PNG(150, 77) as BodyInit, headers: { "content-type": "image/png", "x-attach-token": fbMine.json.attachToken } });
+    expect(fbShot.status, fbShot.text).toBe(201);
+    const fbOther = await api("/feedback", { token: other.token, body: fbBody("othermark") });
+    expect(fbOther.status).toBe(201);
+
     // every v3 table has at least one row from this scenario (so the test really covers them all)
     for (const t of TABLES) expect((await db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first<{ n: number }>())!.n, `${t} has a row`).toBeGreaterThan(0);
     const before = (await Promise.all(TABLES.map(dump))).join("\n");
@@ -63,6 +75,13 @@ describe("account deletion covers every v3 table", () => {
       const text = await dump(t);
       for (const needle of [me.id, me.email, mark, hash]) expect(text, `${t} still holds ${needle}`).not.toContain(needle);
     }
+    // the linked feedback is DELETED (not just unlinked), with its screenshot; the other user's report stays
+    expect(await db.prepare("SELECT id FROM feedback_reports WHERE id = ?1").bind(fbMine.json.id).first()).toBeNull();
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM feedback_attachments WHERE id = ?1").bind(fbShot.json.id).first<{ n: number }>())!.n).toBe(0);
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM feedback_attachment_blobs WHERE attachment_id = ?1").bind(fbShot.json.id).first<{ n: number }>())!.n).toBe(0);
+    expect(await db.prepare("SELECT user_id AS u FROM feedback_reports WHERE id = ?1").bind(fbOther.json.id).first()).toEqual({ u: other.id });
+    await db.prepare("DELETE FROM flags WHERE key = 'feedback.enabled'").run();
+    resetFlagsCache();
     // direct rows are gone
     for (const [t, col] of [["player_profiles", "user_id"], ["player_games", "user_id"], ["lft_listings", "author_user_id"], ["lft_applications", "applicant_user_id"], ["v3_team_captains", "user_id"]] as const) {
       expect((await db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE ${col} = ?1`).bind(me.id).first<{ n: number }>())!.n, t).toBe(0);
@@ -105,7 +124,7 @@ describe("account deletion covers every v3 table", () => {
     // Simulated: the existence probe says "no tables", and no v3 statement is added to the batch.
     const { v3AccountDeletionStatements } = await import("../../src/v3/services/account-service");
     const stub = { DB: { prepare: () => ({ first: async () => null }) } as unknown as D1Database, JWT_SECRET: "x" };
-    expect(await v3AccountDeletionStatements(stub, "u1")).toEqual([]);
+    expect(await v3AccountDeletionStatements(stub, "u1")).toEqual([]); // and the feedback tables are probed the same way
     const u = await user("Plain");
     expect((await api("/auth/delete-account", { token: u.token, body: { password: "correct horse" } })).status).toBe(200);
   });

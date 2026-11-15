@@ -68,6 +68,7 @@ export const AUDIT_ACTIONS = {
   "admin.lookup": NONE,
   "admin.suspend": NONE,
   "admin.session": NONE,
+  "feedback.updated": { status: ["new", "triaged", "fixed", "wontfix"] },
   // developer access (Phase 6): only the id of the row is audited, never the key
   "apikey.created": NONE,
   "apikey.revoked": NONE,

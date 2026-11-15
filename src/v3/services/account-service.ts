@@ -12,10 +12,14 @@
  * Does nothing (and costs one read) when the v3 tables are not migrated yet.
  */
 import { accountDeletionStatements, v3TablesExist } from "../repositories/maintenance-repo";
+import { feedbackTablesExist, accountDeletionStatements as feedbackDeletionStatements } from "../repositories/feedback-repo";
 import { nowSec } from "../lib/ids";
 import { lftReporterHash } from "../lib/reporter";
 
 export async function v3AccountDeletionStatements(env: { DB: D1Database; HASH_KEY?: string; JWT_SECRET: string }, userId: string): Promise<D1PreparedStatement[]> {
-  if (!(await v3TablesExist(env.DB))) return [];
-  return accountDeletionStatements(env.DB, userId, nowSec(), await lftReporterHash(env, userId));
+  const out: D1PreparedStatement[] = [];
+  // Feedback bot (migration 0054): reports linked to this account are DELETED with their screenshots, not just unlinked.
+  if (await feedbackTablesExist(env.DB)) out.push(...feedbackDeletionStatements(env.DB, userId));
+  if (await v3TablesExist(env.DB)) out.push(...accountDeletionStatements(env.DB, userId, nowSec(), await lftReporterHash(env, userId)));
+  return out;
 }

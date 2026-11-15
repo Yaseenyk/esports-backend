@@ -14,6 +14,7 @@ export interface Env {
   DISCORD_BOT_TOKEN?: string; // secret (Discord stage): the bot token. Absent = the drain is a no-op and the install endpoint says "Discord is not configured"
   DISCORD_PUBLIC_KEY?: string; // secret: the application public key (hex) that verifies Discord interaction signatures
   DISCORD_APP_ID?: string; // secret: the application id (= the bot user id); used for the bot permission check and the invite URL
+  FEEDBACK_SALT?: string; // secret (feedback bot): keys the hash of the visitor address (rate limits). Absent = derived from JWT_SECRET (see src/v3/lib/feedback.ts)
   HASH_KEY?: string; // secret: keys unsubscribe tokens (S10); falls back to JWT_SECRET until set
 }
 

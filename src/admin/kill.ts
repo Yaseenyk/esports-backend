@@ -16,14 +16,14 @@
 import { FLAG_DEFAULTS, getFlag, parseFlagValue, type FlagKey } from "../flags";
 import type { Ctx } from "../http";
 
-/** The seven human kill switches (the automatic `shed.tracking` is not one of them). */
+/** The eight human kill switches (the automatic `shed.tracking` is not one of them). */
 export const KILL_KEYS = [
-  "kill.public_forms", "kill.directory", "kill.team_pages", "kill.uploads", "kill.mail", "kill.tracking", "kill.public_writes",
+  "kill.public_forms", "kill.directory", "kill.team_pages", "kill.uploads", "kill.mail", "kill.tracking", "kill.public_writes", "kill.feedback",
 ] as const;
 export type KillKey = (typeof KILL_KEYS)[number];
 
 /** Keys that guard a public write route: the master valve `kill.public_writes` stops these too. */
-const PUBLIC_WRITE_KEYS: readonly KillKey[] = ["kill.public_forms", "kill.directory", "kill.team_pages", "kill.uploads"];
+const PUBLIC_WRITE_KEYS: readonly KillKey[] = ["kill.public_forms", "kill.directory", "kill.team_pages", "kill.uploads", "kill.feedback"];
 
 export const KILL_RETRY_SECONDS = 300;
 

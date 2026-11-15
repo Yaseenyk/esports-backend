@@ -7,16 +7,24 @@
  */
 import { nowSec } from "../lib/ids";
 import * as dispute from "../repositories/dispute-repo";
+import * as feedback from "../repositories/feedback-repo";
+import { feedbackTablesExist } from "../repositories/feedback-repo";
+import { FEEDBACK } from "../lib/feedback";
 import * as lft from "../repositories/lft-repo";
 import { v3TablesExist } from "../repositories/maintenance-repo";
 import { LFT } from "./lft-service";
 
-export interface RetentionResult { skipped: boolean; expired: number; deleted: number; purged: number }
+export interface RetentionResult { skipped: boolean; expired: number; deleted: number; purged: number; feedbackBytesPurged: number; feedbackDeleted: number }
 
 export async function runRetention(db: D1Database, opts: { daily: boolean; now?: number }): Promise<RetentionResult> {
-  const out: RetentionResult = { skipped: false, expired: 0, deleted: 0, purged: 0 };
-  if (!(await v3TablesExist(db))) return { ...out, skipped: true };
+  const out: RetentionResult = { skipped: false, expired: 0, deleted: 0, purged: 0, feedbackBytesPurged: 0, feedbackDeleted: 0 };
   const now = opts.now ?? nowSec();
+  // Feedback bot (migration 0054): runs whatever the flag says, so switching the bot off never keeps data longer than promised.
+  if (opts.daily && (await feedbackTablesExist(db))) {
+    out.feedbackBytesPurged = await feedback.purgeOldBytes(db, now - FEEDBACK.BYTES_RETENTION_SEC, now);
+    out.feedbackDeleted = await feedback.deleteOldReports(db, now - FEEDBACK.REPORT_RETENTION_SEC);
+  }
+  if (!(await v3TablesExist(db))) return { ...out, skipped: true };
   out.expired = await lft.expireOpenListings(db, now);
   if (opts.daily) {
     out.deleted = await lft.deleteOldListings(db, now, LFT.DELETE_AFTER_EXPIRY_SEC);

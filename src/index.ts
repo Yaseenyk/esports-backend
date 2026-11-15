@@ -44,7 +44,7 @@ app.use("*", async (c, next) => {
       headers: {
         "access-control-allow-origin": origin!,
         "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "access-control-allow-headers": "Authorization,Content-Type,X-Gate-Key,If-None-Match",
+        "access-control-allow-headers": "Authorization,Content-Type,X-Gate-Key,X-Attach-Token,If-None-Match",
         "access-control-max-age": "86400",
         vary: "Origin",
       },

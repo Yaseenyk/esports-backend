@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import type { AppBindings } from "../../types";
 import { discordRoutes } from "./discord";
+import { feedbackRoutes } from "./feedback";
 import { disputeRoutes } from "./disputes";
 import { lftRoutes } from "./lft";
 import { resumeRoutes } from "./resume";
@@ -13,3 +14,4 @@ v3.route("/", resumeRoutes);
 v3.route("/", lftRoutes);
 v3.route("/", disputeRoutes);
 v3.route("/", discordRoutes);
+v3.route("/", feedbackRoutes);
