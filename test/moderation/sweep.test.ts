@@ -326,6 +326,12 @@ describe("inventory: no public route escapes the sweep", () => {
     "POST /public/report": "kill switch only (own test above); a report can never be taken down",
     "POST /public/contact": "kill switch only (own test above); serves no published content",
     "POST /public/t": "tracking beacon: already honours kill.tracking and shed.tracking (src/routes/track.ts); no content",
+    "GET /public/tournaments": "esports hub v3: events hidden by a takedown or a suspended organisation are skipped (src/v3/repositories/tournament-repo.eventHidden); own tests in test/v3",
+    "GET /public/tournaments/:slug": "esports hub v3: 404 when the event is taken down (eventHidden); own tests in test/v3",
+    "GET /public/tournaments/:slug/live": "esports hub v3: 404 when the event is taken down (eventHidden); own tests in test/v3",
+    "GET /public/players/:slug": "esports hub v3: gated by visibility, 18+ and consent, not by an event takedown; own tests in test/v3",
+    "GET /public/lft": "esports hub v3: own report and auto-hide machinery (lft_listings.hidden_at, 3 reporters); no event; own tests in test/v3",
+    "GET /public/lft/:id": "esports hub v3: same as GET /public/lft",
     "GET /public/unsubscribe/:token": "must always work (legal duty to stop mail); no published content",
     "POST /public/unsubscribe/:token": "must always work (legal duty to stop mail); no published content",
   };

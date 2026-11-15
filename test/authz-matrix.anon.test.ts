@@ -7,7 +7,7 @@ import { ACCOUNT, D, GATE, PUBLIC, ROUTES, world } from "./golden/rows";
 // Anonymous sweep: route inventory plus anon, garbage-token, gate-key and malformed-header on every route. (split from authz-matrix.test.ts; rows live in test/golden/rows.ts)
 // One row per route in src/routes. `owner` = owner-only. `viewerBlocked` = a GET a view-only member still may not do (403); other GETs give a viewer 200.
 // Feature modules add their rows in test/features/<id>.routes.ts (see test/features/README.md).
-vi.setConfig({ testTimeout: 120_000 });
+vi.setConfig({ testTimeout: 300_000 }); // raised from 120 s: this file makes ~1,500 requests and sits near 70 s alone, so a loaded runner (more test files in parallel) timed it out
 describe("route inventory", () => {
   it("every registered route is covered by this matrix or explicitly public", () => {
     const covered = new Set<string>([

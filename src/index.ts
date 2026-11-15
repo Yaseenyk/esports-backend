@@ -21,6 +21,7 @@ import { admin } from "./admin/routes";
 import { publicReports } from "./moderation/public-reports";
 import { orgs } from "./orgs/routes";
 import { api } from "./api/routes";
+import { v3 } from "./v3/routes";
 
 const app = new Hono<AppBindings>();
 
@@ -41,7 +42,7 @@ app.use("*", async (c, next) => {
       headers: {
         "access-control-allow-origin": origin!,
         "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "access-control-allow-headers": "Authorization,Content-Type,X-Gate-Key",
+        "access-control-allow-headers": "Authorization,Content-Type,X-Gate-Key,If-None-Match",
         "access-control-max-age": "86400",
         vary: "Origin",
       },
@@ -51,6 +52,7 @@ app.use("*", async (c, next) => {
   c.res.headers.set("x-content-type-options", "nosniff");
   c.res.headers.append("vary", "Origin");
   if (originOk) c.res.headers.set("access-control-allow-origin", origin!);
+  if (originOk) c.res.headers.set("access-control-expose-headers", "ETag");
 });
 
 app.get("/", (c) => c.json({ ok: true, name: "esports-api" }));
@@ -71,6 +73,7 @@ app.route("/", admin); // Phase 1: /admin/v1 (staff; 404 for everyone else)
 app.route("/", publicReports);
 app.route("/", api); // Phases 4, 6, 7: /me/analytics, /me/api-keys, /me/entitlements (always on) and the read-only /api/v1
 app.route("/", orgs); // Phase 2a-i: /me/context, /me/export, and the /orgs routes (404 unless flag orgs.team is on)
+app.route("/", v3); // Esports Hub v3 (tournaments, resume, LFT, disputes): every route is flag-gated OFF by default and answers 404 before any v3 table is read
 mountFeatures(app);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));

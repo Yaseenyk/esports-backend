@@ -9,6 +9,7 @@ import { auditOff, auditStmts } from "../audit";
 import { eventDeleteStatements } from "./events";
 import { getFlag } from "../flags";
 import { sendSignupVerification } from "./verify";
+import { v3AccountDeletionStatements } from "../v3/services/account-service";
 
 export const auth = new Hono<AppBindings>();
 
@@ -161,6 +162,7 @@ auth.post("/auth/delete-account", requireUser, async (c) => {
   const off = await auditOff(c.env.DB);
   try {
     await c.env.DB.batch([
+      ...(await v3AccountDeletionStatements(c.env, u.id)), // esports hub v3: scrub what a user wrote in disputes, delete their screenshots (no-op before migration 0051)
       ...handoverStatements(c.env.DB, u.id, plan.handovers),
       ...plan.handovers.flatMap((h) => auditStmts(c.env.DB, { action: "event.handed_over", actorType: "user", actorId: u.id, eventId: h.id, targetType: "event", targetId: h.id }, off)),
       c.env.DB.prepare("DELETE FROM users WHERE id = ?").bind(u.id),

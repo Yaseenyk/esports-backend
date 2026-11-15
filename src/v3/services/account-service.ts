@@ -1,0 +1,21 @@
+/**
+ * Account deletion for the v3 tables. Called by the existing DELETE /auth/account flow (src/routes/auth.ts) BEFORE the users row is deleted, in the same batch.
+ *
+ * What happens to a user's v3 rows:
+ *  - player_profiles, player_games, lft_listings (and their applications and reports), lft_applications, v3_team_captains: deleted by ON DELETE CASCADE.
+ *  - disputes the user RAISED: the row and its history stay (the other team and the organiser need them) but every personal pointer goes: the raiser id is
+ *    nulled by the foreign key, the free text the user wrote (summary, event notes, captions, resolution note if they resolved it) is replaced by "[deleted]",
+ *    and every screenshot THEY uploaded is deleted (blob and caption; the metadata row keeps purged_at).
+ *  - dispute_events actor ids are nulled by the foreign key (the append-only trigger allows exactly that change).
+ *  - reports the user filed on LFT listings are deleted (the reporter key is a hash of the account id).
+ *  - discord_guilds.installed_by_user_id and v3_result_corrections.applied_by are nulled by their foreign keys.
+ * Does nothing (and costs one read) when the v3 tables are not migrated yet.
+ */
+import { accountDeletionStatements, v3TablesExist } from "../repositories/maintenance-repo";
+import { nowSec } from "../lib/ids";
+import { lftReporterHash } from "../lib/reporter";
+
+export async function v3AccountDeletionStatements(env: { DB: D1Database; HASH_KEY?: string; JWT_SECRET: string }, userId: string): Promise<D1PreparedStatement[]> {
+  if (!(await v3TablesExist(env.DB))) return [];
+  return accountDeletionStatements(env.DB, userId, nowSec(), await lftReporterHash(env, userId));
+}

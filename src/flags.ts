@@ -25,6 +25,12 @@ export interface Flags {
   "admin.enabled": boolean;
   "takedown.enforce": boolean;
   "auth.verify_required": boolean; // new password sign-ups must confirm their email (users.verify_required is set at sign-up while this is on)
+  // Esports Hub v3 (ADR-1 option A). All default OFF: the route answers 404 before touching any v3 table.
+  "v3.tournaments": boolean;
+  "v3.resume": boolean;
+  "v3.lft": boolean;
+  "v3.disputes": boolean;
+  "v3.discord": boolean; // flag only in stage 1; the Discord stage is later
 }
 
 export type FlagKey = keyof Flags;
@@ -44,6 +50,11 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "admin.enabled": false,
   "takedown.enforce": false,
   "auth.verify_required": false,
+  "v3.tournaments": false,
+  "v3.resume": false,
+  "v3.lft": false,
+  "v3.disputes": false,
+  "v3.discord": false,
 });
 
 export const FLAG_CACHE_MS = 10_000;

@@ -18,6 +18,7 @@ import { moderationRoutes } from "./moderation";
 import { adminGate, requireStaff, sessionDoor, sessionStaff, type AdminBindings } from "./session";
 import { suspendRoutes } from "./suspend";
 import { usageRoutes } from "./usage";
+import { V3_ADMIN_ROUTES, v3AdminRoutes } from "../v3/routes/admin";
 
 export interface AdminRouteInfo { method: string; path: string; auth: "user" | "staff"; stepUp: boolean | "kill"; irreversible: false }
 
@@ -40,6 +41,8 @@ export const ADMIN_ROUTES: readonly AdminRouteInfo[] = [
   { method: "GET", path: "/admin/v1/takedowns", auth: "staff", stepUp: false, irreversible: false },
   { method: "POST", path: "/admin/v1/takedowns", auth: "staff", stepUp: false, irreversible: false },
   { method: "POST", path: "/admin/v1/takedowns/:type/:id/restore", auth: "staff", stepUp: false, irreversible: false },
+  // Esports Hub v3 moderation (each answers 404 while its flag is off); reversible actions only
+  ...V3_ADMIN_ROUTES.map((r) => ({ ...r, auth: "staff" as const, stepUp: false as const, irreversible: false as const })),
 ];
 
 export const admin = new Hono<AdminBindings>().basePath("/admin/v1");
@@ -53,3 +56,4 @@ admin.route("/", flagRoutes);
 admin.route("/", suspendRoutes);
 admin.route("/", usageRoutes);
 admin.route("/", moderationRoutes);
+admin.route("/", v3AdminRoutes);
