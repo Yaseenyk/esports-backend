@@ -3,12 +3,14 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { uniq } from "../helpers";
 import { lftReporterHash } from "../../src/v3/lib/reporter";
 import { resetFlagsCache } from "../../src/flags";
+import { V3_TABLE_NAMES } from "../../src/v3/lib/personal-tables";
 import { allV3On, api, db, disputeWorld, flagsOn, nowSec, PNG, user } from "./helpers";
 
 vi.setConfig({ testTimeout: 120_000 });
 beforeAll(allV3On);
 
-const TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "feedback_reports", "feedback_attachments", "feedback_attachment_blobs"];
+// one list, shared with the export (src/v3/lib/personal-tables.ts): a table cannot be added to one right without the other
+const TABLES = V3_TABLE_NAMES;
 const dump = async (t: string) => JSON.stringify((await db.prepare(`SELECT * FROM ${t}`).all()).results);
 
 describe("account deletion covers every v3 table", () => {

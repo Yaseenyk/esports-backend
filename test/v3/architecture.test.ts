@@ -104,7 +104,7 @@ describe("feedback bot module layering", () => {
   });
   it("only the feedback and retention/account services and the repository name the feedback tables", () => {
     for (const x of all) {
-      if (/^src\/v3\/repositories\/feedback-repo\.ts$/.test(x.path) || x.path === "src/v3/db/schema.ts") continue;
+      if (/^src\/v3\/repositories\/feedback-repo\.ts$/.test(x.path) || x.path === "src/v3/db/schema.ts" || x.path === "src/v3/lib/personal-tables.ts") continue; // the shared deletion/export table list names tables, nothing more
       expect(x.text, x.path).not.toMatch(/\bfeedback_(reports|attachments|attachment_blobs)\b/);
     }
   });
@@ -117,5 +117,20 @@ describe("feedback bot module layering", () => {
   it("the staff routes live behind the /admin/v1 door (mounted in src/admin/routes.ts) and the public routes in v3/routes/index.ts", () => {
     expect(all.find((x) => x.path === "src/admin/routes.ts")!.text).toContain("feedbackAdminRoutes");
     expect(f("src/v3/routes/index.ts")!.text).toContain("feedbackRoutes");
+  });
+});
+
+describe("Download my data (v3 export) layering", () => {
+  const f = (p: string) => all.find((x) => x.path === p)!;
+  it("the export route reaches v3 only through the export service and names no v3 table", () => {
+    const t = f("src/orgs/export.ts").text;
+    expect(importsOf(t).filter((i) => /v3\//.test(i))).toEqual(["../v3/services/export-service"]);
+    for (const table of ["player_profiles", "player_games", "lft_listings", "lft_applications", "disputes", "dispute_evidence", "v3_team_captains", "feedback_reports"]) expect(t, table).not.toMatch(new RegExp(`\b${table}\b`));
+  });
+  it("the service goes through repositories, the adapter holds no SQL, and neither names a secret column", () => {
+    expect(importsOf(f("src/v3/services/export-service.ts").text).some((i) => /repositories\/export-repo/.test(i))).toBe(true);
+    for (const p of ["src/v3/adapters/export-adapter.ts", "src/v3/services/export-service.ts", "src/v3/repositories/export-repo.ts"]) {
+      expect(f(p).text, p).not.toMatch(/ip_hash|attach_token|token_hash|pw_hash|data\s+FROM|dispute_evidence_blobs|feedback_attachment_blobs/);
+    }
   });
 });

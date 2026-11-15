@@ -25,7 +25,10 @@ describe("POST /me/export (OD-Z)", () => {
     expect(r.headers.get("cache-control")).toBe("private, no-store");
     expect(r.headers.get("content-disposition")).toContain("attachment");
     const j = r.json;
-    expect(Object.keys(j).sort()).toEqual(["account", "brandKits", "events", "exportVersion", "exportedAt", "memberships", "notIncluded", "teamProfiles"]);
+    // exportVersion 2 added exactly one key, `v3` (Resume, LFT, disputes raised, feedback; its own field set is pinned in test/v3/export.test.ts).
+    // `v3Truncated` and `logosOmitted` appear only when the size cap bites.
+    expect(Object.keys(j).sort()).toEqual(["account", "brandKits", "events", "exportVersion", "exportedAt", "memberships", "notIncluded", "teamProfiles", "v3"]);
+    expect(j.exportVersion).toBe(2);
     expect(Object.keys(j.account).sort()).toEqual(["createdAt", "email", "emailVerified", "id", "name"]);
     expect(j.account).toMatchObject({ id: u.id, email: u.email, name: "Export Me", emailVerified: true });
     expect(Object.keys(j.memberships[0]).sort()).toEqual(["addedAt", "kind", "name", "orgId", "role"]);

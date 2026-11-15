@@ -1,14 +1,18 @@
 import { HttpError, rateLimitSubject, type Ctx } from "../http";
 import { myEventList } from "../routes/events";
+import { buildV3Export, loadV3Export, MAX_TRUNCATION_LEVEL, V3_EXPORT_NOT_INCLUDED, type TruncationLevel } from "../v3/services/export-service";
 
 /**
  * POST /me/export (privacy minimum, owner decision OD-Z). "Download my data" for the signed-in user. Always works, whatever the flags say.
  *
  * Contains: the account fields (never the password hash or salt), organisation memberships, the list of events the user can reach with metadata and
  * COUNTS, the user's brand kits and their team profiles.
+ * Since exportVersion 2 it also has a `v3` section (Esports Resume, Looking-for-team board, disputes raised, feedback sent): only the user's OWN rows, built by
+ * v3/services/export-service.ts, the same personal data account deletion covers (lib/personal-tables.ts). This file never queries v3 tables.
  * Does NOT contain: rosters, people, photos, registrations, result proofs, check-ins, contact messages or invitation rows. Those hold other people's
  * data (many of them minors); an organiser exports them per event with the tools that already exist.
- * Size: the whole JSON must stay under EXPORT_MAX_BYTES (logos are the only thing that can be large and are dropped first).
+ * Size: the whole JSON must stay under EXPORT_MAX_BYTES (logos are dropped first, then the v3 lists shrink to counts, largest optional parts first, and
+ * `v3Truncated: true` says so; the download is never refused for the v3 part).
  * The field set is pinned by test/orgs/export.test.ts, so a new field cannot slip in unseen.
  */
 export const EXPORT_MAX_BYTES = 1_000_000;
@@ -19,6 +23,7 @@ export const EXPORT_NOT_INCLUDED = [
   "team registrations and captain contact details",
   "result screenshots and check-ins",
   "contact messages and invitations",
+  ...V3_EXPORT_NOT_INCLUDED,
 ] as const;
 
 interface Counts { id: string; teams: number; people: number; registrations: number; matches: number; checkins: number }
@@ -61,8 +66,9 @@ export async function exportMe(c: Ctx): Promise<Response> {
   const linksBy = new Map<string, { eventId: string; teamName: string }[]>();
   for (const l of links.results) (linksBy.get(l.profile_id) ?? linksBy.set(l.profile_id, []).get(l.profile_id)!).push({ eventId: l.event_id, teamName: l.team_name });
 
-  const build = (withLogos: boolean) => ({
-    exportVersion: 1,
+  const v3Input = await loadV3Export(db, uid);
+  const build = (withLogos: boolean, v3Level: TruncationLevel = 0) => ({
+    exportVersion: 2,
     exportedAt: new Date().toISOString(),
     account: { id: user.id, email: user.email, name: user.name, createdAt: user.created_at, emailVerified: !!user.email_verified_at },
     memberships: memberships.results.map((m) => ({ orgId: m.id, name: m.name, kind: m.kind, role: m.role, addedAt: m.added_at })),
@@ -72,10 +78,15 @@ export async function exportMe(c: Ctx): Promise<Response> {
     }),
     brandKits: kits.results.map((k) => ({ scope: k.scope, name: k.name, primaryColor: k.primary_color, secondaryColor: k.secondary_color, hasLogo: !!k.logo, logo: withLogos ? k.logo : null, updatedAt: k.updated_at })),
     teamProfiles: profiles.results.map((p) => ({ id: p.id, name: p.name, slug: p.slug, published: !!p.published, blurb: p.blurb, links: safeJson(p.links), consentNote: p.consent_note, consentAt: p.consent_at, updatedAt: p.updated_at, events: linksBy.get(p.id) ?? [] })),
+    v3: buildV3Export(v3Input, v3Level),
     notIncluded: EXPORT_NOT_INCLUDED,
   });
   let text = JSON.stringify(build(true));
   if (text.length > SOFT_LIMIT) text = JSON.stringify({ ...build(false), logosOmitted: true });
+  // still large: shrink the v3 lists to counts, the biggest optional parts first (feedback, then LFT, then disputes)
+  for (let level = 1; text.length > SOFT_LIMIT && level <= MAX_TRUNCATION_LEVEL; level++) {
+    text = JSON.stringify({ ...build(false, level as TruncationLevel), logosOmitted: true, v3Truncated: true });
+  }
   if (text.length > EXPORT_MAX_BYTES) throw new HttpError(413, "Your data is too large for one download. Contact support and we will send it another way.");
   return new Response(text, {
     status: 200,

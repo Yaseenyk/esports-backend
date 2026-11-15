@@ -159,3 +159,9 @@ export async function summary(db: D1Database, since30: number, since7: number): 
     new7: (n7!.results[0] as { n: number }).n,
   };
 }
+
+/** "Download my data": the signed-in user's own reports (no ip_hash, no token hash, no staff note, no bytes). */
+export interface FeedbackExportRow { id: string; kind: string; message: string; page_path: string; created_at: number; status: string; contact: string | null; client_errors: string | null }
+export async function feedbackRows(db: D1Database, userId: string): Promise<FeedbackExportRow[]> {
+  return (await db.prepare("SELECT id, kind, message, page_path, created_at, status, contact, client_errors FROM feedback_reports WHERE user_id = ?1 ORDER BY created_at DESC, id LIMIT 200").bind(userId).all<FeedbackExportRow>()).results;
+}
