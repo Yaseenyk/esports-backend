@@ -329,6 +329,8 @@ describe("inventory: no public route escapes the sweep", () => {
     "GET /public/tournaments": "esports hub v3: events hidden by a takedown or a suspended organisation are skipped (src/v3/repositories/tournament-repo.eventHidden); own tests in test/v3",
     "GET /public/tournaments/:slug": "esports hub v3: 404 when the event is taken down (eventHidden); own tests in test/v3",
     "GET /public/tournaments/:slug/live": "esports hub v3: 404 when the event is taken down (eventHidden); own tests in test/v3",
+    "GET /public/colleges": "esports hub v3: events hidden by a takedown are skipped in SQL (college-repo), suspended organisations are not listed; own tests in test/v3/gaps.test.ts",
+    "GET /public/colleges/:slug": "esports hub v3: same rules as the list (hidden events skipped in SQL, suspended or unverified organisation is a 404); own tests in test/v3/gaps.test.ts",
     "GET /public/players/:slug": "esports hub v3: gated by visibility, 18+ and consent, not by an event takedown; own tests in test/v3",
     "GET /public/lft": "esports hub v3: own report and auto-hide machinery (lft_listings.hidden_at, 3 reporters); no event; own tests in test/v3",
     "GET /public/lft/:id": "esports hub v3: same as GET /public/lft",

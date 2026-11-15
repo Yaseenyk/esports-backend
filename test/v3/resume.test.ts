@@ -126,7 +126,7 @@ describe("public read", () => {
     await api("/v3/me/games/bgmi", { method: "PUT", token: u.token, body: { inGameName: "Ravi", rankCode: "ace", rankOrdinal: 20, roles: ["igl"] } });
     const r = await api(`/public/players/${slug}`);
     expect(r.status).toBe(200);
-    expect(Object.keys(r.json).sort()).toEqual(["bio", "city", "games", "handle", "languages", "slug", "state", "updatedAt"]);
+    expect(Object.keys(r.json).sort()).toEqual(["bio", "city", "games", "handle", "languages", "slug", "state", "stats", "updatedAt"]);
     expect(r.json.games).toEqual([{ game: "bgmi", inGameName: "Ravi", rankCode: "ace", rankOrdinal: 20, roles: ["igl"] }]);
     for (const secret of [u.id, u.email, "discord"]) expect(r.text).not.toContain(secret);
     expect(r.headers.get("cache-control")).toBe("public, max-age=0");

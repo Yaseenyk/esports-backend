@@ -115,10 +115,11 @@ export async function runDiscordDrain(
 interface Ctx { db: D1Database; rest: DiscordRest; cfg: DiscordConfig }
 
 async function execute(db: D1Database, rest: DiscordRest, cfg: DiscordConfig, j: repo.JobRow): Promise<void> {
-  let p: { registrationId?: unknown; userId?: unknown };
+  let p: { registrationId?: unknown; userId?: unknown; discordUserId?: unknown; remove?: unknown };
   try { p = JSON.parse(j.payload); } catch { throw new JobFatal("payload is not valid"); }
   if (typeof p.registrationId !== "string") throw new JobFatal("payload has no registration");
   const jc = await repo.jobContext(db, p.registrationId);
+  if (p.remove === true && j.kind === "assign_team_role") return removeTeamRole({ db, rest, cfg }, j, jc, typeof p.discordUserId === "string" ? p.discordUserId : null);
   if (!jc) throw new JobFatal("registration no longer exists");
   const c: Ctx = { db, rest, cfg };
   switch (j.kind) {
@@ -163,6 +164,19 @@ async function createTeamChannel(c: Ctx, j: repo.JobRow, jc: repo.JobContext): P
     await repo.recordIds(c.db, { registrationId: reg.id, eventId: reg.eventId, guildId: j.guildId, channelId }, nowSec());
   }
   await repo.enqueue(c.db, [{ id: newId(), kind: "assign_team_role", guildId: j.guildId, payload: { registrationId: reg.id }, key: `assign_team_role:${reg.id}:init`, runAfter: nowSec() }], nowSec());
+}
+
+/** The user unlinked Discord: take the team role back. Nothing to take back (registration gone, role never made, user not in the server) is success, not an error. */
+async function removeTeamRole(c: Ctx, j: repo.JobRow, jc: repo.JobContext | null, discordUserId: string | null): Promise<void> {
+  const roleId = jc?.rd?.roleId ?? null;
+  if (discordUserId && roleId && jc?.rd?.guildId === j.guildId) {
+    try {
+      await c.rest.removeMemberRole(j.guildId, discordUserId, roleId);
+    } catch (e) {
+      if (!(e instanceof DiscordError && e.kind === "permanent" && e.status === 404)) throw e; // already not a member / role already gone
+    }
+  }
+  await repo.scrubPayload(c.db, j.id, { registrationId: jc?.reg.id ?? null, remove: true, done: true });
 }
 
 async function assignTeamRole(c: Ctx, j: repo.JobRow, jc: repo.JobContext, onlyUser: string | null): Promise<void> {

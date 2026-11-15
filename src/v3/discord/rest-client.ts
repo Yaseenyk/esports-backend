@@ -93,6 +93,7 @@ export class DiscordRest {
   createRole(guildId: string, name: string) { return this.call<{ id: string }>("POST", `/guilds/${guildId}/roles`, { name, mentionable: false, hoist: false, permissions: "0" }, "team role"); }
   createChannel(guildId: string, body: Json) { return this.call<{ id: string }>("POST", `/guilds/${guildId}/channels`, body, "team channel"); }
   addMemberRole(guildId: string, userId: string, roleId: string) { return this.call("PUT", `/guilds/${guildId}/members/${userId}/roles/${roleId}`, undefined, "team role"); }
+  removeMemberRole(guildId: string, userId: string, roleId: string) { return this.call("DELETE", `/guilds/${guildId}/members/${userId}/roles/${roleId}`, undefined, "team role"); }
   postMessage(channelId: string, content: string, nonce: string) {
     return this.call<{ id: string }>("POST", `/channels/${channelId}/messages`, { content, nonce: nonce.slice(0, 25), enforce_nonce: true, allowed_mentions: { parse: [] } });
   }

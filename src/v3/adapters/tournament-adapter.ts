@@ -98,6 +98,7 @@ export function toOrganiserTournament(t: TournamentRow, seoFailures: string[]) {
     endsAt: toIso(t.endsAt),
     publishedAt: toIso(t.publishedAt),
     seoReady: t.seoReady,
+    seoReadyAt: toIso(t.seoReadyAt),
     seoFailures,
     discordGuildId: t.discordGuildId,
     discordCategoryId: t.discordCategoryId,

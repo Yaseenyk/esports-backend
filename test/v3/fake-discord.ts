@@ -37,6 +37,7 @@ export class FakeDiscord {
     if (call.method === "POST" && /^\/guilds\/\d+\/roles$/.test(p)) return j({ id: `5${++this.n}` });
     if (call.method === "POST" && /^\/guilds\/\d+\/channels$/.test(p)) return j({ id: `6${++this.n}` });
     if (call.method === "PUT" && (m = /^\/guilds\/\d+\/members\/(\d+)\/roles\/\d+$/.exec(p))) return this.notInGuild.has(m[1]!) ? j({ message: "Unknown Member", code: 10007 }, 404) : new Response(null, { status: 204 });
+    if (call.method === "DELETE" && (m = /^\/guilds\/\d+\/members\/(\d+)\/roles\/\d+$/.exec(p))) return this.notInGuild.has(m[1]!) ? j({ message: "Unknown Member", code: 10007 }, 404) : new Response(null, { status: 204 });
     if (call.method === "POST" && /^\/channels\/\d+\/messages$/.test(p)) return j({ id: `7${++this.n}` });
     if (call.method === "PUT" && /^\/channels\/\d+\/permissions\/\d+$/.test(p)) return new Response(null, { status: 204 });
     if (call.method === "DELETE" && /^\/channels\/\d+$/.test(p)) return j({});

@@ -148,6 +148,18 @@ export async function channelsOfCaptain(db: D1Database, userId: string): Promise
   return r.results.map((x) => ({ registrationId: x.rid, guildId: x.g, channelId: x.ch, teamName: x.team, title: x.title }));
 }
 
+/** Every team role the bot made for a team this user captains (channel archived or not): what an unlink must take back. */
+export async function rolesOfCaptain(db: D1Database, userId: string): Promise<{ registrationId: string; guildId: string }[]> {
+  const r = await db.prepare(
+    "SELECT rd.registration_id AS rid, rd.guild_id AS g FROM v3_team_captains c JOIN registrations r ON r.event_id = c.event_id AND lower(r.team_name) = c.team_key JOIN v3_registration_discord rd ON rd.registration_id = r.id WHERE c.user_id = ?1 AND rd.role_id IS NOT NULL ORDER BY rd.created_at LIMIT 50",
+  ).bind(userId).all<{ rid: string; g: string }>();
+  return r.results.map((x) => ({ registrationId: x.rid, guildId: x.g }));
+}
+/** Drops the Discord id from a finished removal job: it is only kept until the role is gone. */
+export async function scrubPayload(db: D1Database, id: string, payload: Record<string, unknown>): Promise<void> {
+  await db.prepare("UPDATE discord_outbox SET payload = ?2 WHERE id = ?1").bind(id, JSON.stringify(payload)).run();
+}
+
 export interface JobContext { reg: RegContext; t: TournamentCtx | null; rd: RegDiscord | null }
 /** Everything a drain job needs about one registration in ONE statement (registration + tournament wrapper + what the bot already created). */
 export async function jobContext(db: D1Database, registrationId: string): Promise<JobContext | null> {

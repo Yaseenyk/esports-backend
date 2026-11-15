@@ -45,3 +45,15 @@ export function seoVerdict(i: SeoGuardInput): SeoVerdict {
 }
 
 export const seoReady = (i: SeoGuardInput): boolean => seoVerdict(i).ready;
+
+/**
+ * WEEKLY CAP on NEWLY indexable programmatic pages (README ADR-5: "weekly cap of 10"; a flood of new pages cost this owner an index once).
+ * The cap counts by DATE (tournaments.seo_ready_at, migration 0055), not by the boolean. A page that was released before (its seo_ready_at is set, or
+ * seo_ready was already true when the column was added) is never capped again: the cap only gates the FIRST release.
+ */
+export const SEO_WEEKLY_CAP = 10;
+export const SEO_WINDOW_SEC = 7 * 86_400;
+
+export function capAllowsRelease(i: { alreadyReleased: boolean; releasedInWindow: number; cap?: number }): boolean {
+  return i.alreadyReleased || i.releasedInWindow < (i.cap ?? SEO_WEEKLY_CAP);
+}

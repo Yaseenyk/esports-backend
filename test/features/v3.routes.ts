@@ -45,6 +45,8 @@ const feature: FeatureRoutes = {
     { method: "GET", path: "/public/tournaments" },
     { method: "GET", path: "/public/tournaments/:slug" },
     { method: "GET", path: "/public/tournaments/:slug/live" },
+    { method: "GET", path: "/public/colleges" },
+    { method: "GET", path: "/public/colleges/:slug" },
     // Discord stage (flag v3.discord): interactions is signature-checked (401), the rest need a bearer token
     { method: "POST", path: "/v3/discord/interactions" },
     { method: "POST", path: "/v3/discord/link-code" },

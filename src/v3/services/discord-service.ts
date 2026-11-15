@@ -193,8 +193,32 @@ export async function createLinkCode(db: D1Database, userId: string) {
 export async function linkStatus(db: D1Database, userId: string) {
   return { linked: (await repo.getDiscordUserId(db, userId)) !== null };
 }
+/** Deterministic key of a role removal: the same registration, account and Discord id at the same unlink moment is one job, however often it is queued. */
+export const removeRoleKey = (registrationId: string, userId: string, discordUserId: string, at: number): string => `remove_team_role:${registrationId}:${userId}:${discordUserId}:${at}`;
+
+/**
+ * Unlinking clears the Discord id and queues one `assign_team_role` job with remove:true per team role the user held (outbox, so it is retried and never
+ * duplicated). The Discord id travels in the job payload only until the job is done (then it is scrubbed). Failing to queue never blocks the unlink.
+ */
 export async function unlinkDiscord(db: D1Database, userId: string) {
+  const discordUserId = await repo.getDiscordUserId(db, userId);
+  let jobs: repo.JobInsert[] = [];
+  if (discordUserId) {
+    try {
+      const at = nowSec();
+      jobs = (await repo.rolesOfCaptain(db, userId)).map((c) => job("assign_team_role", c.guildId, { registrationId: c.registrationId, userId, discordUserId, remove: true }, removeRoleKey(c.registrationId, userId, discordUserId, at), at));
+    } catch {
+      console.warn("discord: could not look up roles to remove");
+    }
+  }
   await repo.setDiscordUserId(db, userId, null);
+  if (jobs.length) {
+    try {
+      await repo.enqueue(db, jobs, nowSec());
+    } catch {
+      console.warn("discord: could not queue role removal after unlink");
+    }
+  }
   return { linked: false };
 }
 
@@ -207,7 +231,7 @@ export async function completeLink(db: D1Database, discordUserId: string, rawCod
   if (!userId) return "bad_code";
   if (!(await repo.setDiscordUserId(db, userId, discordUserId))) return "taken";
   try {
-    const jobs = (await repo.channelsOfCaptain(db, userId)).map((c) => job("assign_team_role", c.guildId, { registrationId: c.registrationId, userId }, `assign_team_role:${c.registrationId}:u:${discordUserId}`, nowSec()));
+    const jobs = (await repo.channelsOfCaptain(db, userId)).map((c) => job("assign_team_role", c.guildId, { registrationId: c.registrationId, userId }, `assign_team_role:${c.registrationId}:u:${discordUserId}:${nowSec()}`, nowSec()));
     if (jobs.length) await repo.enqueue(db, jobs, nowSec());
   } catch {
     console.warn("discord: could not queue role after link");

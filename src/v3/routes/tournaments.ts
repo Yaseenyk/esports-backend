@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { requireUser } from "../../auth";
 import { HttpError, rateLimitSoft, readJson, type Ctx } from "../../http";
 import type { AppBindings } from "../../types";
+import { listPublicColleges, publicCollege } from "../services/college-service";
 import {
   createTournament, getTournamentForOrganiser, listPublicTournaments, publicLive, publicTournamentDetail, transitionTournament, updateTournament,
 } from "../services/tournament-service";
@@ -50,4 +51,14 @@ tournamentRoutes.get("/public/tournaments/:slug", ...pub, async (c) => {
 tournamentRoutes.get("/public/tournaments/:slug/live", ...pub, async (c) => {
   rateLimitSoft(c, "v3-live", 240, 60);
   return cachedJson(c, await publicLive(c.env.DB, c.req.param("slug")), 15, 30);
+});
+
+// ---- public colleges (verified organisations with at least one real tournament) ----
+tournamentRoutes.get("/public/colleges", ...pub, async (c) => {
+  rateLimitSoft(c, "v3-pub", 120, 60);
+  return cachedJson(c, await listPublicColleges(c.env.DB), 300, 600);
+});
+tournamentRoutes.get("/public/colleges/:slug", ...pub, async (c) => {
+  rateLimitSoft(c, "v3-pub", 120, 60);
+  return cachedJson(c, await publicCollege(c.env.DB, c.req.param("slug")), 60, 300);
 });

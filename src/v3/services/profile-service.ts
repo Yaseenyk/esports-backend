@@ -5,8 +5,16 @@ import { nowSec, toIso } from "../lib/ids";
 import { checkSlug } from "../lib/slug";
 import { bad, enumArray, optEnum, optInt, optText, reqEnum, reqText, shortList } from "../lib/validate";
 import * as profiles from "../repositories/profile-repo";
+import * as stats from "../repositories/stats-repo";
 import * as users from "../repositories/user-repo";
 import { toOwnProfile, toPublicPlayer } from "../adapters/profile-adapter";
+import { buildResumeStats } from "../adapters/stats-adapter";
+
+/** Resume numbers: computed on every read from verified results (never stored, never typed by the player). */
+async function statsOf(db: D1Database, userId: string) {
+  const [m, b, c] = await Promise.all([stats.verifiedMatchRows(db, userId), stats.verifiedBrRows(db, userId), stats.correctionsForUser(db, userId)]);
+  return buildResumeStats(m, b, c);
+}
 
 type Body = Record<string, unknown>;
 
@@ -49,7 +57,7 @@ export async function getMyProfile(db: D1Database, userId: string) {
   const u = await me(db, userId);
   const p = await profiles.getProfile(db, userId);
   if (!p) return { profile: null, adultConfirmedAt: toIso(u.adultConfirmedAt), resumeConsentAt: toIso(u.resumeConsentAt) };
-  return { profile: toOwnProfile(p, await profiles.listGames(db, userId), u) };
+  return { profile: toOwnProfile(p, await profiles.listGames(db, userId), u, await statsOf(db, userId)) };
 }
 
 export async function putMyProfile(db: D1Database, userId: string, b: Body) {
@@ -123,5 +131,5 @@ export async function publicPlayer(db: D1Database, slug: string) {
   if (!/^[a-z0-9-]{3,60}$/.test(slug)) throw new HttpError(404, "Not found");
   const r = await profiles.getProfileBySlugWithConsent(db, slug);
   if (!r || r.profile.visibility !== "public" || r.adultConfirmedAt === null || r.resumeConsentAt === null || r.userStatus !== "active") throw new HttpError(404, "Not found");
-  return toPublicPlayer(r.profile, await profiles.listGames(db, r.profile.userId));
+  return toPublicPlayer(r.profile, await profiles.listGames(db, r.profile.userId), await statsOf(db, r.profile.userId));
 }

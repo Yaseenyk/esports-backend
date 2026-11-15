@@ -40,6 +40,8 @@ export const tournaments = sqliteTable(
     startsAt: integer("starts_at"),
     endsAt: integer("ends_at"),
     seoReady: integer("seo_ready", { mode: "boolean" }).notNull().default(false),
+    /** Epoch seconds of the FIRST time the page became indexable (migration 0055). The weekly cap counts this date. NULL = never released (or released before the column existed). */
+    seoReadyAt: integer("seo_ready_at"),
     publishedAt: integer("published_at"),
     discordGuildId: text("discord_guild_id"),
     discordCategoryId: text("discord_category_id"),

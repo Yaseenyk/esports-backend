@@ -547,6 +547,8 @@
   "public GET /orgs/:id/members": "404 | Not found | ",
   "public GET /orgs/convert/preview": "404 | Not found | ",
   "public GET /public/brand/:slug": "404 | not_found | ",
+  "public GET /public/colleges": "404 | Not found | ",
+  "public GET /public/colleges/:slug": "404 | Not found | ",
   "public GET /public/directory": "200 | - | cities,entries,games,hasMore,page",
   "public GET /public/invite/:token": "404 | Invite not found | ",
   "public GET /public/league/:slug": "404 | not_found | ",

@@ -125,3 +125,9 @@ export async function hasVerifiedResults(db: D1Database, eventId: string): Promi
     .first();
   return r !== null;
 }
+
+/** How many pages were FIRST released (seo_ready_at) at or after `since`, not counting `exceptId`. Feeds the weekly cap. */
+export async function countSeoReleasedSince(db: D1Database, since: number, exceptId: string): Promise<number> {
+  const r = await db.prepare("SELECT COUNT(*) AS n FROM tournaments WHERE seo_ready_at IS NOT NULL AND seo_ready_at >= ?1 AND id != ?2").bind(since, exceptId).first<{ n: number }>();
+  return r?.n ?? 0;
+}

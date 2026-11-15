@@ -2,7 +2,7 @@
 import { HttpError } from "../../http";
 import { GAMES, TOURNAMENT_FORMATS, TOURNAMENT_STATUSES, VENUES, isOneOf, type TournamentStatus } from "../lib/enums";
 import { newId, nowSec } from "../lib/ids";
-import { seoVerdict } from "../lib/seo-guard";
+import { SEO_WINDOW_SEC, capAllowsRelease, seoVerdict } from "../lib/seo-guard";
 import { checkSlug, slugify } from "../lib/slug";
 import { TOURNAMENT_MOVES, canMove } from "../lib/state-machines";
 import { bad, optDate, optEnum, optInt, optText, reqEnum, reqText } from "../lib/validate";
@@ -22,19 +22,29 @@ async function organiserAccess(db: D1Database, userId: string, eventId: string, 
   return a;
 }
 
+/** Guard verdict plus the weekly cap. A page released before (seo_ready_at set, or seo_ready already true) is never held back by the cap. */
 async function seoFor(db: D1Database, t: TournamentRow) {
   const [titleUsed, results] = await Promise.all([repo.titleUsedByOther(db, t.title, t.id), repo.hasVerifiedResults(db, t.eventId)]);
-  return seoVerdict({
+  const v = seoVerdict({
     title: t.title, titleIsUnique: !titleUsed, summary: t.summary, description: t.description, startsAt: t.startsAt, venue: t.venue, city: t.city,
     status: t.status, hasVerifiedResults: results, publishedAt: t.publishedAt,
   });
+  if (!v.ready) return v;
+  const alreadyReleased = t.seoReady || t.seoReadyAt !== null;
+  if (alreadyReleased) return v;
+  const releasedInWindow = await repo.countSeoReleasedSince(db, nowSec() - SEO_WINDOW_SEC, t.id);
+  return capAllowsRelease({ alreadyReleased, releasedInWindow }) ? v : { ready: false, failures: ["weekly_cap"] };
 }
 
 async function refreshSeo(db: D1Database, t: TournamentRow): Promise<{ row: TournamentRow; failures: string[] }> {
   const v = await seoFor(db, t);
-  if (v.ready !== t.seoReady) {
-    await repo.update(db, t.id, { seoReady: v.ready, updatedAt: nowSec() });
-    return { row: { ...t, seoReady: v.ready }, failures: v.failures };
+  const firstRelease = v.ready && t.seoReadyAt === null && !t.seoReady;
+  if (v.ready !== t.seoReady || firstRelease) {
+    const at = nowSec();
+    const patch: Partial<repo.TournamentInsert> = { seoReady: v.ready, updatedAt: at };
+    if (firstRelease) patch.seoReadyAt = at;
+    await repo.update(db, t.id, patch);
+    return { row: { ...t, ...patch } as TournamentRow, failures: v.failures };
   }
   return { row: t, failures: v.failures };
 }

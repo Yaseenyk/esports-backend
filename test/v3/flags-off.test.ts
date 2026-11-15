@@ -20,7 +20,7 @@ function spyEnv() {
   return { env: { ...env, DB } as typeof env, sql };
 }
 
-const v3Routes = () => [...new Map(app.routes.filter((r) => r.method !== "ALL" && /^\/(v3\/|public\/(tournaments|players|lft))/.test(r.path)).map((r) => [`${r.method} ${r.path}`, r])).values()];
+const v3Routes = () => [...new Map(app.routes.filter((r) => r.method !== "ALL" && /^\/(v3\/|public\/(tournaments|players|colleges|lft))/.test(r.path)).map((r) => [`${r.method} ${r.path}`, r])).values()];
 
 describe("v3 flags default OFF and a v3 route then answers 404 before any v3 table is touched", () => {
   it("the five flags exist, default false", () => {
