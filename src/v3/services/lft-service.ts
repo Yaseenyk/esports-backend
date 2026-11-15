@@ -24,7 +24,8 @@ function textOr400(r: ReturnType<typeof validateLftMessage>, field: string): str
   if (r.ok) return r.text;
   const msg: Record<string, string> = {
     empty: `${field} is too short`, too_long: `${field} is too long`, has_link: `${field} must not contain links`, has_phone: `${field} must not contain phone numbers`,
-    has_markup: `${field} must be plain text`, bad_contact: `${field} must be a short handle (letters, digits . _ # @ -)`,
+    has_markup: `${field} must be plain text`,
+    contact_outside: "Contact details are shared only after the poster accepts an application. Remove the handle or the \"DM me\" line and ask people to apply here.", bad_contact: `${field} must be a short handle (letters, digits . _ # @ -)`,
   };
   throw bad(msg[r.code] ?? `${field} is not valid`, `${field}_${r.code}`);
 }

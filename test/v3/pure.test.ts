@@ -85,6 +85,20 @@ describe("LFT text validator", () => {
     expect(validateLftMessage("ह".repeat(600)).ok).toBe(true);
     expect(cleanText("a‮b​c\u0000d")).toBe("a b c d");
   });
+  it.each([
+    "DM me on insta @rohan_igl", "dm me", "DM   me for scrims", "Message me on discord", "contact me on telegram", "ping me on snap", "add me on steam", "call me anytime",
+    "text me after 8", "reach me on whatsapp", "whatsapp me", "msg me", "hit me up on discord", "my id @rohan.igl", "insta: rohan_igl", "Instagram - rohan_igl",
+    "discord rohan#1234", "Rohan_IGL#0420 on the server", "telegram: rohan99", "snapchat rohan_igl", "discord is rohan_igl", "mail rohan@gmail",
+  ])("rejects outside contact %j", (s) => no(`IGL looking for team. ${s}`, "contact_outside"));
+  it.each([
+    "I stream on insta sometimes", "My IGN is rohan", "Ace rank, 3 years of scrims", "Scrims @9pm IST every day", "Discord voice required, mic is a must", "Discord: required",
+    "I use WhatsApp for my family only", "Our team plays on Telegram groups often", "Looking for a dm player, not a sniper", "Call of Duty Mobile veteran, rank 17", "Add some heart: serious grind",
+    "email is not needed here", "Rank #1 in my city last season", "My KD is 4.2 @ ranked",
+  ])("accepts ordinary words %j", (s) => ok(`IGL looking for team. ${s}`));
+  it("applications stay lenient: a handle is fine, links and phones are not", () => {
+    expect(validateApplicationMessage("DM me on insta @rohan_igl").ok).toBe(true);
+    expect(validateApplicationMessage("insta.com/rohan").ok).toBe(false);
+  });
   it("application message may be empty; contact is a short handle", () => {
     expect(validateApplicationMessage(undefined)).toEqual({ ok: true, text: "" });
     expect(validateApplicationMessage("see me at x.com").ok).toBe(false);

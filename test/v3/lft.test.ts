@@ -57,6 +57,8 @@ describe("creating listings", () => {
       [{ message: "Looking for team, my site is example.com ok" }, "message_has_link"],
       [{ message: "Looking for team, call me on 9876543210 now" }, "message_has_phone"],
       [{ message: "Looking for team, whatsapp +91 98765 43210" }, "message_has_phone"],
+      [{ message: "Looking for team, DM me on insta @rohan_igl" }, "message_contact_outside"],
+      [{ message: "Looking for team, discord rohan#1234 add me" }, "message_contact_outside"],
       [{ message: "a".repeat(601) }, "message_too_long"], [{ message: "short" }, "message_empty"], [{ message: "<b>looking for team please</b>" }, "message_has_markup"],
       [{ contact: "https://x.co/me" }, "contact_bad_contact"], [{ contact: "9876543210" }, "contact_has_phone"], [{ contact: "x" }, "contact_bad_contact"],
       [{ game: "chess" }, "invalid_game"], [{ kind: "x" }, "invalid_kind"], [{ roles: ["wizard"] }, "invalid_roles"], [{ rankMin: 30, rankMax: 10 }, "invalid_rank_range"],
