@@ -10,10 +10,9 @@ export interface AccountV3Row { adult_confirmed_at: number | null; resume_consen
 /** The three v3 columns on users (migration 0052). Columns that are not there yet read as empty. */
 export async function accountRow(db: D1Database, userId: string): Promise<AccountV3Row | null> {
   const cols = new Set((await db.prepare("SELECT name FROM pragma_table_info('users') WHERE name IN ('adult_confirmed_at', 'resume_consent_at', 'discord_user_id')").all<{ name: string }>()).results.map((c) => c.name));
-  if (cols.size === 0) return null;
-  // the column list is assembled from three fixed strings, never from input
-  const sel = [cols.has("adult_confirmed_at") ? "adult_confirmed_at" : "NULL AS adult_confirmed_at", cols.has("resume_consent_at") ? "resume_consent_at" : "NULL AS resume_consent_at", cols.has("discord_user_id") ? "(discord_user_id IS NOT NULL) AS has_discord" : "0 AS has_discord"];
-  return (await db.prepare(`SELECT ${sel.join(", ")} FROM users WHERE id = ?1`).bind(userId).first<AccountV3Row>()) ?? null;
+  // Migration 0052 adds all three columns together: either they are all there or none is. One constant query (the repo bans building SQL from strings).
+  if (cols.size < 3) return null;
+  return (await db.prepare("SELECT adult_confirmed_at, resume_consent_at, CASE WHEN discord_user_id IS NULL THEN 0 ELSE 1 END AS has_discord FROM users WHERE id = ?1").bind(userId).first<AccountV3Row>()) ?? null;
 }
 
 export interface ProfileRow { slug: string; handle: string; bio: string | null; city: string | null; state: string | null; languages: string; visibility: string; created_at: number }
@@ -27,8 +26,11 @@ export async function gameRows(db: D1Database, userId: string): Promise<GameRow[
 
 export interface ListingRow { id: string; kind: string; game: string; roles: string; message: string; status: string; created_at: number; expires_at: number; state: string | null; city: string | null; online_ok: number; received: number }
 export async function listingRows(db: D1Database, userId: string, withCounts: boolean): Promise<ListingRow[]> {
-  const received = withCounts ? "(SELECT COUNT(*) FROM lft_applications a WHERE a.listing_id = l.id)" : "0";
-  return (await db.prepare(`SELECT l.id AS id, l.kind AS kind, l.game AS game, l.roles AS roles, l.message AS message, l.status AS status, l.created_at AS created_at, l.expires_at AS expires_at, l.state AS state, l.city AS city, l.online_ok AS online_ok, ${received} AS received FROM lft_listings l WHERE l.author_user_id = ?1 ORDER BY l.created_at DESC, l.id LIMIT 200`).bind(userId).all<ListingRow>()).results;
+  // Two constant queries (the repo bans building SQL from strings): with and without the per-listing count of applications received.
+  const stmt = withCounts
+    ? db.prepare("SELECT l.id AS id, l.kind AS kind, l.game AS game, l.roles AS roles, l.message AS message, l.status AS status, l.created_at AS created_at, l.expires_at AS expires_at, l.state AS state, l.city AS city, l.online_ok AS online_ok, (SELECT COUNT(*) FROM lft_applications a WHERE a.listing_id = l.id) AS received FROM lft_listings l WHERE l.author_user_id = ?1 ORDER BY l.created_at DESC, l.id LIMIT 200")
+    : db.prepare("SELECT l.id AS id, l.kind AS kind, l.game AS game, l.roles AS roles, l.message AS message, l.status AS status, l.created_at AS created_at, l.expires_at AS expires_at, l.state AS state, l.city AS city, l.online_ok AS online_ok, 0 AS received FROM lft_listings l WHERE l.author_user_id = ?1 ORDER BY l.created_at DESC, l.id LIMIT 200");
+  return (await stmt.bind(userId).all<ListingRow>()).results;
 }
 export interface SentApplicationRow { listing_id: string; message: string | null; status: string; created_at: number; responded_at: number | null }
 export async function sentApplicationRows(db: D1Database, userId: string): Promise<SentApplicationRow[]> {
