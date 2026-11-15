@@ -25,7 +25,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       DB_NAME: ${{ inputs.target == 'production' && 'esports-db' || 'esports-db-staging' }}
-      ENV_FLAG: ${{ inputs.target == 'production' && '' || '--env staging' }}
+      # '' is falsy in an Actions expression, so 'production && "" || x' fell through to x. Put the non-empty value on the true side.
+      ENV_FLAG: ${{ inputs.target == 'staging' && '--env staging' || '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
