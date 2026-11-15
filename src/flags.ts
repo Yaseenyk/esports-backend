@@ -30,7 +30,7 @@ export interface Flags {
   "v3.resume": boolean;
   "v3.lft": boolean;
   "v3.disputes": boolean;
-  "v3.discord": boolean; // flag only in stage 1; the Discord stage is later
+  "v3.discord": boolean; // Discord automation (stage 3): install flow, /link, interactions endpoint, outbox drain
 }
 
 export type FlagKey = keyof Flags;

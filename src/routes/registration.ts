@@ -5,6 +5,7 @@ import { HttpError, nowIso, optBool, optStr, rateLimit, readJson, str } from "..
 import { ownedEvent, requireUser } from "../auth";
 import { takenDown } from "../moderation/takedown";
 import { killGate } from "../admin/kill";
+import { onRegistrationApproved } from "../v3/services/discord-service";
 import { ACK_VERSION, acknowledgementOffer } from "../orgs/ack";
 
 export const registration = new Hono<AppBindings>();
@@ -111,6 +112,7 @@ registration.post("/events/:id/registrations/:rid/approve", requireUser, async (
   ];
   const res = await db.batch(statements);
   if (res[1]!.meta.changes !== 1) throw new HttpError(409, "Registration was already handled");
+  await onRegistrationApproved(db, ev.id, r.id); // v3 Discord: queues a team channel when flag v3.discord is on; swallows every error
   return c.json({ ok: true, teamId, people: players.length });
 });
 

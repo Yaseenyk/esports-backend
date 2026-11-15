@@ -26,6 +26,7 @@ export type DisputeOutcome = (typeof DISPUTE_OUTCOMES)[number];
 export const EVIDENCE_MIMES = ["image/png", "image/jpeg", "image/webp"] as const;
 export type EvidenceMime = (typeof EVIDENCE_MIMES)[number];
 export const OUTBOX_KINDS = ["create_team_channel", "assign_team_role", "ping_lobby", "post_result", "archive_channels"] as const;
+export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 export const OUTBOX_STATUSES = ["pending", "running", "done", "failed", "dead"] as const;
 
 export const isOneOf = <T extends string>(list: readonly T[], v: unknown): v is T => typeof v === "string" && (list as readonly string[]).includes(v);

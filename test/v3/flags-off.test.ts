@@ -4,7 +4,7 @@ import app from "../../src/index";
 import { FLAG_DEFAULTS } from "../../src/flags";
 import { api, flagsOn, user } from "./helpers";
 
-const V3_TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox"];
+const V3_TABLES = ["tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "v3_registration_discord", "discord_link_codes", "v3_discord_settings"];
 
 /** An env whose DB records every statement it is asked to prepare. */
 function spyEnv() {

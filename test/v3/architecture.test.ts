@@ -52,6 +52,14 @@ describe("v3 Trinity layering", () => {
     }
   });
 
+  it("the Discord REST client and budget helper are leaf modules: no layer imports, no drizzle, no schema", () => {
+    const d = v3.filter((f) => f.path.startsWith("src/v3/discord/"));
+    expect(d.length).toBeGreaterThan(0);
+    for (const f of d) {
+      for (const i of importsOf(f.text)) expect(i, `${f.path} imports ${i}`).not.toMatch(/repositories\/|services\/|routes\/|adapters\/|drizzle|schema|\/db\//);
+    }
+  });
+
   it("lib stays pure: no layer imports, no database", () => {
     for (const f of layer("lib")) {
       for (const i of importsOf(f.text)) expect(i, `${f.path} imports ${i}`).not.toMatch(/repositories\/|services\/|routes\/|adapters\/|drizzle|\/db\//);

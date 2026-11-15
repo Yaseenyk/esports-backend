@@ -4,7 +4,7 @@ import { sha256 } from "./crypto";
 
 export class HttpError extends Error {
   constructor(
-    public status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 422 | 429 | 500,
+    public status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 422 | 429 | 500 | 502 | 503,
     message: string,
     /** Extra JSON fields next to `error` in the response body (for example a machine-readable `code`). */
     public extra?: Record<string, unknown>,

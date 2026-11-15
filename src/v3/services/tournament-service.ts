@@ -8,6 +8,7 @@ import { TOURNAMENT_MOVES, canMove } from "../lib/state-machines";
 import { bad, optDate, optEnum, optInt, optText, reqEnum, reqText } from "../lib/validate";
 import { loadEventAccess, type EventAccessRow } from "../repositories/event-access-repo";
 import * as repo from "../repositories/tournament-repo";
+import { onTournamentCompleted } from "./discord-service";
 import type { TournamentRow } from "../repositories/tournament-repo";
 import { toOrganiserTournament, toPublicDetail, toPublicLive, toPublicTournament } from "../adapters/tournament-adapter";
 
@@ -145,6 +146,7 @@ export async function transitionTournament(db: D1Database, userId: string, event
   }
   const at = nowSec();
   await repo.update(db, t.id, { status: to, publishedAt: t.publishedAt ?? (to === "published" ? at : null), updatedAt: at });
+  if (to === "completed") await onTournamentCompleted(db, t.eventId); // Discord: archive team channels (flag-guarded, never throws)
   const next = (await repo.findById(db, t.id))!;
   const r = await refreshSeo(db, next);
   return toOrganiserTournament(r.row, r.failures);

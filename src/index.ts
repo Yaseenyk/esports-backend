@@ -22,6 +22,8 @@ import { publicReports } from "./moderation/public-reports";
 import { orgs } from "./orgs/routes";
 import { api } from "./api/routes";
 import { v3 } from "./v3/routes";
+import { runDiscordDrain } from "./v3/services/discord-drain-service";
+import { discordConfigFromEnv } from "./v3/services/discord-service";
 
 const app = new Hono<AppBindings>();
 
@@ -89,6 +91,8 @@ Object.assign(app, {
   scheduled: (c: ScheduledController, e: AppBindings["Bindings"], x: ExecutionContext) => {
     scheduled(c, e, x);
     x.waitUntil(linksBackfillTick(c.scheduledTime, e)); // S7 phase A: hash old clear tokens a few rows at a time
+    // v3 Discord outbox: a no-op unless flag v3.discord is on AND the bot secrets are set (jobs then stay pending). Bounded: 10 jobs, 25 Discord calls, ~24 queries.
+    x.waitUntil(runDiscordDrain(e.DB, discordConfigFromEnv(e), { now: Math.floor(c.scheduledTime / 1000) }).then(() => undefined, () => { console.error("discord drain failed"); }));
   },
 });
 
