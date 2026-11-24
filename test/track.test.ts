@@ -34,7 +34,7 @@ const count = async (table: string) => (await env.DB.prepare(`SELECT COUNT(*) AS
 describe("the ten-to-eight registry", () => {
   it("holds the PM's final list: eight events (report_filed and takedown cut), only tool_complete from the client", () => {
     expect([...METRIC_NAMES].sort()).toEqual(["club_created", "event_created", "invite_accepted", "live_published", "registration_opened", "signup_done", "team_registered", "tool_complete"]);
-    expect(TOOL_IDS).toHaveLength(14);
+    expect(TOOL_IDS).toHaveLength(18);
     expect(METRICS.event_created).toEqual(["scratch", "duplicate"]);
     for (const n of METRIC_NAMES) expect(n.length).toBeLessThanOrEqual(24); // metrics_daily CHECK
   });

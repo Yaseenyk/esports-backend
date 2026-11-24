@@ -9,10 +9,11 @@
  *  - Pure module (no `cloudflare:*` imports). Constant SQL only.
  */
 
-/** The 14 free tools (keys of the frontend TOOL_PAGES). Same list in esports-hub/src/lib/track.ts; a test there pins it to TOOL_PAGES. */
+/** The 18 free tools (keys of the frontend TOOL_PAGES). Same list in esports-hub/src/lib/track.ts; a test there pins it to TOOL_PAGES. */
 export const TOOL_IDS = [
   "poster", "plan", "id-cards", "double-elimination", "registration", "round-robin", "schedule",
   "certificates", "display-screen", "check-in", "brackets", "points-table", "groups", "print-kits",
+  "sensitivity-converter", "team-name-generator", "prize-split", "rulebook",
 ] as const;
 
 /** name -> allowed `d1` members. An empty list means d1 must be empty. */
