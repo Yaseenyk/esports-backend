@@ -13,7 +13,7 @@ describe("0056 on a populated database", () => {
     const before = await snapshot();
     const tablesBefore = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name);
     const colsBefore = JSON.stringify((await env.DB.prepare("SELECT m.name AS t, p.name AS c, p.type AS ty, p.\"notnull\" AS nn FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND m.name NOT LIKE '_cf_%' AND m.name NOT LIKE 'sqlite_%' AND m.name != 'd1_migrations' ORDER BY m.name, p.cid").all()).results);
-    await applyAll();
+    await applyUpTo(58); // 0056 and 0057 only (later files belong to other work streams and have their own tests)
     expect(await snapshot()).toEqual(before);
     const added = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name).filter((n) => !tablesBefore.includes(n)).sort();
     expect(added).toEqual([...NEW, "scrim_slot_assignments", "scrim_waitlist", "scrim_notifications", "scrim_schedules", "scrim_schedule_days"].sort()); // + the 0057 scrim manager tables
