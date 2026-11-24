@@ -11,6 +11,7 @@ import { profileRoutes } from "./profiles";
 import { resumeRoutes } from "./resume";
 import { scrimRoutes } from "./scrims";
 import { tournamentRoutes } from "./tournaments";
+import { communityRoutes } from "./community";
 
 export const v3 = new Hono<AppBindings>();
 v3.route("/", tournamentRoutes);
@@ -25,3 +26,4 @@ v3.route("/", scrimRoutes);
 v3.route("/", directoryRoutes);
 // Organiser match tools (24 Nov 2026): flags v3.rooms, v3.recaps, v3.screenshots, all OFF by default.
 v3.route("/", organiserToolRoutes);
+v3.route("/", communityRoutes);

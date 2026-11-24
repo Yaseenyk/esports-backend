@@ -20,6 +20,7 @@ import { suspendRoutes } from "./suspend";
 import { usageRoutes } from "./usage";
 import { V3_ADMIN_ROUTES, v3AdminRoutes } from "../v3/routes/admin";
 import { FEEDBACK_ADMIN_ROUTES, feedbackAdminRoutes } from "../v3/routes/feedback-admin";
+import { COMMUNITY_ADMIN_ROUTES, communityAdminRoutes } from "../v3/routes/community-admin";
 
 export interface AdminRouteInfo { method: string; path: string; auth: "user" | "staff"; stepUp: boolean | "kill"; irreversible: false }
 
@@ -46,6 +47,8 @@ export const ADMIN_ROUTES: readonly AdminRouteInfo[] = [
   ...V3_ADMIN_ROUTES.map((r) => ({ ...r, auth: "staff" as const, stepUp: false as const, irreversible: false as const })),
   // Feedback bot triage (404 while feedback.enabled is off); reads, plus a status/note PATCH
   ...FEEDBACK_ADMIN_ROUTES.map((r) => ({ ...r, auth: "staff" as const, stepUp: false as const, irreversible: false as const })),
+  // Community moderation (calendar, organiser trust; 404 while their flag is off): hide / restore / dismiss with a reason
+  ...COMMUNITY_ADMIN_ROUTES.map((r) => ({ ...r, auth: "staff" as const, stepUp: false as const, irreversible: false as const })),
 ];
 
 export const admin = new Hono<AdminBindings>().basePath("/admin/v1");
@@ -61,3 +64,4 @@ admin.route("/", usageRoutes);
 admin.route("/", moderationRoutes);
 admin.route("/", v3AdminRoutes);
 admin.route("/", feedbackAdminRoutes);
+admin.route("/", communityAdminRoutes);

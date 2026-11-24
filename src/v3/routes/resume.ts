@@ -10,7 +10,7 @@ import { cachedJson, flagGate, killReadMw, noStore } from "./common";
 
 export const resumeRoutes = new Hono<AppBindings>();
 const resumeGate = flagGate("v3.resume");
-const anyGate = flagGate("v3.resume", "v3.lft", "v3.disputes");
+const anyGate = flagGate("v3.resume", "v3.lft", "v3.disputes", "v3.calendar", "v3.trust"); // the account facts (18+) serve every feature that writes
 
 // ---- shared account facts ----
 resumeRoutes.get("/v3/me/status", anyGate, requireUser, async (c) => {

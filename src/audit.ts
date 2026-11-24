@@ -69,6 +69,12 @@ export const AUDIT_ACTIONS = {
   "admin.suspend": NONE,
   "admin.session": NONE,
   "feedback.updated": { status: ["new", "triaged", "fixed", "wontfix"] },
+  // community moderation (organiser trust reviews, calendar entries): reason in reason_code, never the text
+  "trust.hidden": { target: ["review", "reply"] },
+  "trust.restored": { target: ["review", "reply"] },
+  "trust.report_dismissed": { target: ["review", "reply"] },
+  "calendar.hidden": NONE,
+  "calendar.restored": NONE,
   // developer access (Phase 6): only the id of the row is audited, never the key
   "apikey.created": NONE,
   "apikey.revoked": NONE,

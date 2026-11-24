@@ -339,6 +339,9 @@ describe("inventory: no public route escapes the sweep", () => {
     "GET /public/scrims": "esports hub v3 phase 4: own report and auto-hide machinery (scrim_slots.hidden_at); no event; own tests in test/v3/scrims.test.ts",
     "GET /public/scrims/:id": "esports hub v3 phase 4: same as GET /public/scrims",
     "GET /public/tournament-directory": "esports hub v3 phase 5: events hidden by a takedown or a suspended organisation are skipped in SQL (directory-repo); own tests in test/v3/directory.test.ts",
+    "GET /public/community/status": "community (0080): two booleans, no content",
+    "GET /public/calendar": "community (0080): only verified, active organisations; entries carry their own staff hide (calendar_entries.hidden_at); own tests in test/v3/calendar.test.ts",
+    "GET /public/tournaments/:slug/trust": "community (0080): 404 when the event is taken down (eventHidden); reviews carry their own staff hide; own tests in test/v3/trust.test.ts",
     "GET /public/unsubscribe/:token": "must always work (legal duty to stop mail); no published content",
     "POST /public/unsubscribe/:token": "must always work (legal duty to stop mail); no published content",
   };

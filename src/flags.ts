@@ -39,6 +39,8 @@ export interface Flags {
   "v3.recaps": boolean; // organiser tools: match recap facts for the template recap and picture
   "v3.screenshots": boolean; // organiser tools: save battle royale results read from a screenshot in the browser (every row confirmed)
   "v3.directory": boolean; // public tournament directory: upcoming public tournaments by game and city, optional public sign-up link
+  "v3.calendar": boolean; // college esports calendar (migration 0080): /public/calendar and the verified-organisation listing routes
+  "v3.trust": boolean; // organiser trust score (migration 0080): proof-based ratings, reviews, replies, reports, staff moderation
   "feedback.enabled": boolean; // on-page feedback bot (migration 0054): /feedback routes and the staff list. OFF = 404 before any feedback table is read
 }
 
@@ -71,6 +73,8 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "v3.rooms": false,
   "v3.recaps": false,
   "v3.screenshots": false,
+  "v3.calendar": false,
+  "v3.trust": false,
   "feedback.enabled": false,
 });
 
