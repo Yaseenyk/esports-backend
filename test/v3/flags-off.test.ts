@@ -4,7 +4,7 @@ import app from "../../src/index";
 import { FLAG_DEFAULTS } from "../../src/flags";
 import { api, flagsOn, prodLikeOn, user } from "./helpers";
 
-const V3_TABLES = ["scrim_slot_assignments", "scrim_waitlist", "scrim_notifications", "scrim_schedules", "scrim_schedule_days", "v3_team_pages", "v3_player_hidden_items", "v3_team_hidden_items", "v3_profile_reports", "v3_profile_moderation", "scrim_slots", "scrim_requests", "scrim_reports", "scrim_blocks", "v3_tournament_directory", "tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "v3_registration_discord", "discord_link_codes", "v3_discord_settings", "feedback_reports", "feedback_attachments", "feedback_attachment_blobs"];
+const V3_TABLES = ["scrim_slot_assignments", "scrim_waitlist", "scrim_notifications", "scrim_schedules", "scrim_schedule_days", "v3_team_pages", "v3_player_hidden_items", "v3_team_hidden_items", "v3_profile_reports", "v3_profile_moderation", "scrim_slots", "scrim_requests", "scrim_reports", "scrim_blocks", "v3_tournament_directory", "tournaments", "player_profiles", "player_games", "lft_listings", "lft_applications", "lft_reports", "disputes", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "v3_result_corrections", "v3_team_captains", "discord_guilds", "discord_outbox", "v3_registration_discord", "discord_link_codes", "v3_discord_settings", "feedback_reports", "feedback_attachments", "feedback_attachment_blobs", "v3_match_rooms", "v3_room_views"];
 
 /** An env whose DB records every statement it is asked to prepare. */
 function spyEnv() {
@@ -24,7 +24,7 @@ const v3Routes = () => [...new Map(app.routes.filter((r) => r.method !== "ALL" &
 
 describe("v3 flags default OFF and a v3 route then answers 404 before any v3 table is touched", () => {
   it("the five flags exist, default false", () => {
-    for (const k of ["v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.discord", "v3.profiles", "v3.scrims", "v3.directory"] as const) expect(FLAG_DEFAULTS[k], k).toBe(false);
+    for (const k of ["v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.discord", "v3.profiles", "v3.scrims", "v3.directory", "v3.rooms", "v3.recaps", "v3.screenshots"] as const) expect(FLAG_DEFAULTS[k], k).toBe(false);
   });
 
   it("feedback.enabled and kill.feedback exist, default false", () => {

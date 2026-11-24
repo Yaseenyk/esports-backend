@@ -54,6 +54,10 @@ async function seed() {
   await db.prepare("INSERT INTO v3_result_corrections (id, dispute_id, event_id, match_ref, old_value, new_value, applied_by, created_at) VALUES (?4, ?5, ?1, 'match:x', '{}', '{}', ?2, ?3)").bind(w.eventId, me.id, nowSec(), `c${uniq()}`, rid).run();
   await db.prepare("INSERT INTO discord_guilds (guild_id, installed_by_user_id, permissions_ok, installed_at) VALUES (?3, ?1, 1, ?2)").bind(me.id, nowSec(), gid).run();
   await db.prepare("INSERT INTO discord_outbox (id, kind, guild_id, payload, idempotency_key) VALUES (?1, 'create_team_channel', ?2, '{}', ?1)").bind(`job${uniq()}`, gid).run();
+  // match rooms (0070): a room I created as organiser and a reveal I made as captain; neither is exported (organiser data and the organiser's audit log)
+  const roomId = `room${uniq()}`;
+  await db.prepare("INSERT INTO v3_match_rooms (id, event_id, label, starts_at, reveal_at, secret_enc, created_by) VALUES (?1, ?2, 'Lobby', ?3, ?3, 'v1.x.y', ?4)").bind(roomId, w.eventId, nowSec(), me.id).run();
+  await db.prepare("INSERT INTO v3_room_views (id, room_id, event_id, user_id, team_name, secret_version, viewed_at) VALUES (?1, ?2, ?3, ?4, 'Alpha Wolves', 1, ?5)").bind(`view${uniq()}`, roomId, w.eventId, me.id, nowSec()).run();
   const discordId = `DISCORDID${uniq()}`;
   await db.prepare("UPDATE users SET discord_user_id = ?1 WHERE id = ?2").bind(discordId, me.id).run();
   await db.prepare("INSERT INTO flags (key, value, updated_by, updated_at, note) VALUES ('feedback.enabled', 'true', 'test', ?1, '') ON CONFLICT (key) DO UPDATE SET value = 'true'").bind(new Date().toISOString()).run();

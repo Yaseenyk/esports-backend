@@ -15,22 +15,25 @@ import { FEEDBACK } from "../lib/feedback";
 import * as lft from "../repositories/lft-repo";
 import { v3TablesExist } from "../repositories/maintenance-repo";
 import { LFT } from "./lft-service";
+import { purgeRoomSecrets } from "./room-service";
 import * as scrims from "../repositories/scrim-repo";
 import { deleteOrphanTeamModeration, showcaseTablesExist } from "../repositories/showcase-repo";
 import { SCRIMS } from "./scrim-service";
 import { managerTablesExist } from "../repositories/scrim-manager-repo";
 import { runManagerTick } from "./scrim-manager-service";
 
-export interface RetentionResult { skipped: boolean; expired: number; deleted: number; purged: number; feedbackBytesPurged: number; feedbackDeleted: number; scrimsDeleted: number; orphansDeleted: number; scrimOffersExpired: number; scrimDaysMade: number }
+export interface RetentionResult { skipped: boolean; expired: number; deleted: number; purged: number; feedbackBytesPurged: number; feedbackDeleted: number; scrimsDeleted: number; orphansDeleted: number; scrimOffersExpired: number; scrimDaysMade: number; roomSecretsPurged: number }
 
 export async function runRetention(db: D1Database, opts: { daily: boolean; now?: number }): Promise<RetentionResult> {
-  const out: RetentionResult = { skipped: false, expired: 0, deleted: 0, purged: 0, feedbackBytesPurged: 0, feedbackDeleted: 0, scrimsDeleted: 0, orphansDeleted: 0, scrimOffersExpired: 0, scrimDaysMade: 0 };
+  const out: RetentionResult = { skipped: false, expired: 0, deleted: 0, purged: 0, feedbackBytesPurged: 0, feedbackDeleted: 0, scrimsDeleted: 0, orphansDeleted: 0, scrimOffersExpired: 0, scrimDaysMade: 0, roomSecretsPurged: 0 };
   const now = opts.now ?? nowSec();
   // Feedback bot (migration 0054): runs whatever the flag says, so switching the bot off never keeps data longer than promised.
   if (opts.daily && (await feedbackTablesExist(db))) {
     out.feedbackBytesPurged = await feedback.purgeOldBytes(db, now - FEEDBACK.BYTES_RETENTION_SEC, now);
     out.feedbackDeleted = await feedback.deleteOldReports(db, now - FEEDBACK.REPORT_RETENTION_SEC);
   }
+  // Match rooms (migration 0070): every tick, whatever the flag says, so switching the feature off never keeps a password longer than 24 hours after the start.
+  out.roomSecretsPurged = await purgeRoomSecrets(db, now);
   if (!(await v3TablesExist(db))) return { ...out, skipped: true };
   // Phase 4b scrim manager (migration 0057): late waitlist offers pass on and recurring schedules make their days, only while v3.scrims is on.
   if (await managerTablesExist(db)) {

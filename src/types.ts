@@ -15,6 +15,7 @@ export interface Env {
   DISCORD_PUBLIC_KEY?: string; // secret: the application public key (hex) that verifies Discord interaction signatures
   DISCORD_APP_ID?: string; // secret: the application id (= the bot user id); used for the bot permission check and the invite URL
   FEEDBACK_SALT?: string; // secret (feedback bot): keys the hash of the visitor address (rate limits). Absent = derived from JWT_SECRET (see src/v3/lib/feedback.ts)
+  ROOM_CREDENTIALS_KEY?: string; // secret (v3.rooms): encrypts match-room IDs and passwords at rest (AES-GCM). 32+ characters. Absent = room create/rotate/reveal answer 503 rooms_not_configured
   HASH_KEY?: string; // secret: keys unsubscribe tokens (S10); falls back to JWT_SECRET until set
 }
 

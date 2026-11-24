@@ -51,6 +51,9 @@ describe("account deletion covers every v3 table", () => {
     await db.prepare("INSERT INTO v3_result_corrections (id, dispute_id, event_id, match_ref, old_value, new_value, applied_by, created_at) VALUES ('corr1', 'resolvedbyme', ?1, 'match:x', '{}', '{}', ?2, ?3)").bind(w.eventId, me.id, nowSec()).run();
     await db.prepare("INSERT INTO discord_guilds (guild_id, installed_by_user_id, permissions_ok, installed_at) VALUES ('guild1', ?1, 1, ?2)").bind(me.id, nowSec()).run();
     await db.prepare("INSERT INTO discord_outbox (id, kind, guild_id, payload, idempotency_key) VALUES ('job1', 'create_team_channel', 'guild1', '{}', 'k1')").run();
+    // match rooms (0070): a room I created as organiser (created_by is nulled) and a reveal I made as captain (deleted with the account)
+    await db.prepare("INSERT INTO v3_match_rooms (id, event_id, label, starts_at, reveal_at, secret_enc, created_by) VALUES ('room1', ?1, 'Lobby', ?2, ?2, 'v1.x.y', ?3)").bind(w.eventId, nowSec(), me.id).run();
+    await db.prepare("INSERT INTO v3_room_views (id, room_id, event_id, user_id, team_name, secret_version, viewed_at) VALUES ('view1', 'room1', ?1, ?2, 'Alpha Wolves', 1, ?3)").bind(w.eventId, me.id, nowSec()).run();
 
     // feedback bot: one report linked to my account (with a contact, a screenshot and my marker), one of the other user that must survive
     await db.prepare("INSERT INTO flags (key, value, updated_by, updated_at, note) VALUES ('feedback.enabled', 'true', 'test', ?1, '') ON CONFLICT (key) DO UPDATE SET value = 'true'").bind(new Date().toISOString()).run();

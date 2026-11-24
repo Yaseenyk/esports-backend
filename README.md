@@ -42,6 +42,7 @@ JWT_SECRET=some-long-random-string
 | `JWT_SECRET` | secret, required | signs the HS256 login tokens |
 | `ALLOWED_ORIGINS` | var | comma list; default `https://esports.streamerosai.com,http://localhost:3000,http://localhost:4173` |
 | `PBKDF2_ITERATIONS` | var, optional | default and maximum `100000` (the Workers WebCrypto cap) |
+| `ROOM_CREDENTIALS_KEY` | secret, optional | 32+ random characters; encrypts match-room IDs and passwords at rest (flag `v3.rooms`). Unset = room create, rotate and reveal answer 503 `rooms_not_configured`. Generate with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`, then `npx wrangler secret put ROOM_CREDENTIALS_KEY` (add `--env staging` for staging). Changing it makes stored rooms unreadable until the organiser sets a new password |
 
 ## Deploying (instructions for the owner; nothing here was run)
 

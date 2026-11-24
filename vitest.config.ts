@@ -15,6 +15,7 @@ export default defineConfig(async () => {
             LINK_KEY: "test-link-key-test-link-key-test-link-key",
             STAFF_JWT_SECRET: "test-staff-secret-test-staff-secret-test-staff",
             TOTP_KEK: "test-totp-kek-test-totp-kek-test-totp-kek",
+            ROOM_CREDENTIALS_KEY: "test-room-key-test-room-key-test-room-key",
             TEST_MIGRATIONS: migrations,
           },
         },

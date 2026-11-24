@@ -6,6 +6,7 @@ import { feedbackRoutes } from "./feedback";
 import { directoryRoutes } from "./directory";
 import { disputeRoutes } from "./disputes";
 import { lftRoutes } from "./lft";
+import { organiserToolRoutes } from "./organiser-tools";
 import { profileRoutes } from "./profiles";
 import { resumeRoutes } from "./resume";
 import { scrimRoutes } from "./scrims";
@@ -22,3 +23,5 @@ v3.route("/", feedbackRoutes);
 v3.route("/", profileRoutes);
 v3.route("/", scrimRoutes);
 v3.route("/", directoryRoutes);
+// Organiser match tools (24 Nov 2026): flags v3.rooms, v3.recaps, v3.screenshots, all OFF by default.
+v3.route("/", organiserToolRoutes);
