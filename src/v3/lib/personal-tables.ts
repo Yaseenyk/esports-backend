@@ -26,5 +26,22 @@ export const V3_PERSONAL_TABLES: Record<string, { deletion: DeletionMode; export
   feedback_reports: { deletion: "deleted", export: "included" },
   feedback_attachments: { deletion: "deleted", export: "metadata" },
   feedback_attachment_blobs: { deletion: "deleted", export: "none", why: "image bytes are not exported" },
+  // Phases 3-5 (migration 0056)
+  v3_team_pages: { deletion: "cascade", export: "included", why: "goes with the team page (legacy team_profiles), which goes with the account" },
+  v3_player_hidden_items: { deletion: "cascade", export: "included" },
+  v3_team_hidden_items: { deletion: "cascade", export: "included" },
+  v3_profile_reports: { deletion: "deleted", export: "none", why: "reporter is a one-way hash; reports ABOUT the user's pages are staff data and are deleted with the account" },
+  v3_profile_moderation: { deletion: "deleted", export: "none", why: "staff moderation state of the page, deleted with the account" },
+  scrim_slots: { deletion: "cascade", export: "included" },
+  scrim_requests: { deletion: "cascade", export: "included", why: "only requests the user SENT; requests received are other captains' data (counts only)" },
+  scrim_reports: { deletion: "deleted", export: "none", why: "reporter is a one-way hash; the report concerns another captain's slot" },
+  scrim_blocks: { deletion: "cascade", export: "included", why: "only blocks the user made (the team name and date); who blocked the user is other people's data" },
+  v3_tournament_directory: { deletion: "cascade", export: "none", why: "organiser setting that goes with the event" },
+  // Phase 4b scrim manager (migration 0057)
+  scrim_slot_assignments: { deletion: "cascade", export: "none", why: "seat numbers of a scrim; the user's own requests and slots are exported" },
+  scrim_waitlist: { deletion: "cascade", export: "included" },
+  scrim_notifications: { deletion: "cascade", export: "included" },
+  scrim_schedules: { deletion: "cascade", export: "included" },
+  scrim_schedule_days: { deletion: "cascade", export: "none", why: "the day list generated from the user's schedule (the schedule itself is exported)" },
 };
 export const V3_TABLE_NAMES = Object.keys(V3_PERSONAL_TABLES);

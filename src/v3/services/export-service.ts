@@ -5,6 +5,8 @@
  * The caller shrinks the result with a TruncationLevel when the JSON would be too large; it never fails the download.
  */
 import * as repo from "../repositories/export-repo";
+import * as scrims from "../repositories/scrim-repo";
+import * as manager from "../repositories/scrim-manager-repo";
 import { feedbackRows, feedbackTablesExist, type FeedbackExportRow } from "../repositories/feedback-repo";
 import { buildV3Export, MAX_TRUNCATION_LEVEL, type TruncationLevel, type V3ExportInput } from "../adapters/export-adapter";
 
@@ -19,7 +21,7 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
   const has = (n: string) => t.has(n);
   const empty = <T>(): Promise<T[]> => Promise.resolve([]);
   const feedbackOk = await feedbackTablesExist(db);
-  const [account, profile, games, listings, sent, disputes, evidence, captains, feedback] = await Promise.all([
+  const [account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices] = await Promise.all([
     repo.accountRow(db, userId),
     has("player_profiles") ? repo.profileRow(db, userId) : Promise.resolve(null),
     has("player_games") ? repo.gameRows(db, userId) : empty<repo.GameRow>(),
@@ -29,8 +31,17 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
     has("dispute_evidence") ? repo.evidenceMetaRows(db, userId) : empty<repo.EvidenceMetaRow>(),
     has("v3_team_captains") ? repo.captainRows(db, userId) : empty<repo.CaptainRow>(),
     feedbackOk ? feedbackRows(db, userId) : empty<FeedbackExportRow>(),
+    has("v3_team_pages") ? repo.teamPageSettingRows(db, userId) : empty<repo.TeamPageSettingRow>(),
+    has("v3_player_hidden_items") ? repo.playerHiddenRows(db, userId) : empty<{ item_key: string; created_at: number }>(),
+    has("v3_team_hidden_items") ? repo.teamHiddenRows(db, userId) : empty<{ slug: string; item_key: string; created_at: number }>(),
+    has("scrim_slots") ? scrims.exportSlots(db, userId) : empty<scrims.SlotExportRow>(),
+    has("scrim_requests") ? scrims.exportRequests(db, userId) : empty<scrims.RequestExportRow>(),
+    has("scrim_blocks") ? scrims.exportBlocks(db, userId) : empty<{ label: string; created_at: number }>(),
+    has("scrim_schedules") ? manager.exportSchedules(db, userId) : empty<Awaited<ReturnType<typeof manager.exportSchedules>>[number]>(),
+    has("scrim_waitlist") ? manager.exportEntries(db, userId) : empty<{ slot_id: string; status: string; created_at: number }>(),
+    has("scrim_notifications") ? manager.exportNotices(db, userId) : empty<{ kind: string; created_at: number; read_at: number | null }>(),
   ]);
-  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback };
+  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices };
 }
 
 export { buildV3Export, MAX_TRUNCATION_LEVEL, type TruncationLevel, type V3ExportInput };

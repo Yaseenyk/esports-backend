@@ -1,5 +1,6 @@
 /** v3 rows to the "Download my data" JSON. Builds payloads only: no SQL, repositories as type imports. Never emits other people's ids, hashes, tokens or bytes. */
-import type { AccountV3Row, CaptainRow, DisputeRow, EvidenceMetaRow, GameRow, ListingRow, ProfileRow, SentApplicationRow } from "../repositories/export-repo";
+import type { AccountV3Row, CaptainRow, DisputeRow, EvidenceMetaRow, GameRow, ListingRow, ProfileRow, SentApplicationRow, TeamPageSettingRow } from "../repositories/export-repo";
+import type { RequestExportRow, SlotExportRow } from "../repositories/scrim-repo";
 import type { FeedbackExportRow } from "../repositories/feedback-repo";
 import { toIso } from "../lib/ids";
 
@@ -18,6 +19,11 @@ export interface V3ExportInput {
   listings: ListingRow[]; sent: SentApplicationRow[];
   disputes: DisputeRow[]; evidence: EvidenceMetaRow[]; captains: CaptainRow[];
   feedback: FeedbackExportRow[];
+  // phases 3-5 (migration 0056); optional so callers built before them still type-check
+  teamPages?: TeamPageSettingRow[]; playerHidden?: { item_key: string; created_at: number }[]; teamHidden?: { slug: string; item_key: string; created_at: number }[];
+  slots?: SlotExportRow[]; scrimRequests?: RequestExportRow[]; blocks?: { label: string; created_at: number }[];
+  schedules?: { game: string; time_of_day: string; days_ahead: number; region: string; slots_total: number; contact: string; active: number; created_at: number }[];
+  waitlistEntries?: { slot_id: string; status: string; created_at: number }[]; notices?: { kind: string; created_at: number; read_at: number | null }[];
 }
 /** 0 = everything; 1 = feedback reduced to a count; 2 = also LFT listings and sent applications; 3 = also raised disputes (all reduced to counts). */
 export type TruncationLevel = 0 | 1 | 2 | 3;
@@ -46,6 +52,21 @@ export function buildV3Export(i: V3ExportInput, level: TruncationLevel = 0) {
       raised: level >= 3 ? [] : i.disputes.map((d) => ({ id: d.id, tournament: d.tournament_slug, type: d.type, status: d.status, summary: d.summary, createdAt: toIso(d.created_at), resolvedAt: toIso(d.resolved_at), outcome: d.outcome, resolutionNote: d.resolution_note, evidence: i.evidence.filter((e) => e.dispute_id === d.id).map(meta) })),
       evidenceOnOtherDisputes: level >= 3 ? [] : i.evidence.filter((e) => !raisedIds.has(e.dispute_id)).map(meta),
       captainClaims: i.captains.map((c) => ({ eventId: c.event_id, teamName: c.team_name, createdAt: toIso(c.created_at) })),
+    },
+    profiles: {
+      teamPageSettings: (i.teamPages ?? []).map((t) => ({ teamPage: t.slug, name: t.name, visibility: t.visibility, publicSince: toIso(t.public_since) })),
+      hiddenOnPlayerPage: (i.playerHidden ?? []).map((h) => ({ item: h.item_key, createdAt: toIso(h.created_at) })),
+      hiddenOnTeamPages: (i.teamHidden ?? []).map((h) => ({ teamPage: h.slug, item: h.item_key, createdAt: toIso(h.created_at) })),
+    },
+    scrims: {
+      slotCount: (i.slots ?? []).length,
+      slots: level >= 2 ? [] : (i.slots ?? []).map((s) => ({ id: s.id, game: s.game, startsAt: toIso(s.starts_at), region: s.region, server: s.server, skillNote: s.skill_note, slotsTotal: s.slots_total, slotsFilled: s.slots_filled, contact: s.contact, status: s.status, createdAt: toIso(s.created_at), requestsReceived: s.requests_received })),
+      sentRequestCount: (i.scrimRequests ?? []).length,
+      sentRequests: level >= 2 ? [] : (i.scrimRequests ?? []).map((q) => ({ slotId: q.slot_id, message: q.message, contact: q.contact, status: q.status, createdAt: toIso(q.created_at), respondedAt: toIso(q.responded_at) })),
+      blocksMade: (i.blocks ?? []).map((b) => ({ team: b.label, createdAt: toIso(b.created_at) })),
+      schedules: (i.schedules ?? []).map((s) => ({ game: s.game, timeOfDayIst: s.time_of_day, daysAhead: s.days_ahead, region: s.region, slots: s.slots_total, contact: s.contact, active: s.active === 1, createdAt: toIso(s.created_at) })),
+      waitlist: (i.waitlistEntries ?? []).map((w) => ({ slotId: w.slot_id, status: w.status, createdAt: toIso(w.created_at) })),
+      notices: (i.notices ?? []).map((n) => ({ kind: n.kind, createdAt: toIso(n.created_at), read: n.read_at !== null })),
     },
     feedback: {
       reportCount: i.feedback.length,

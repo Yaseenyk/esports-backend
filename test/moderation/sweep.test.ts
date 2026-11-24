@@ -334,6 +334,11 @@ describe("inventory: no public route escapes the sweep", () => {
     "GET /public/players/:slug": "esports hub v3: gated by visibility, 18+ and consent, not by an event takedown; own tests in test/v3",
     "GET /public/lft": "esports hub v3: own report and auto-hide machinery (lft_listings.hidden_at, 3 reporters); no event; own tests in test/v3",
     "GET /public/lft/:id": "esports hub v3: same as GET /public/lft",
+    "GET /public/profiles/players/:slug": "esports hub v3 phase 3: visibility, 18+, consent and its own report/auto-hide (v3_profile_moderation); results of taken-down events are skipped in SQL; own tests in test/v3/profiles.test.ts",
+    "GET /public/profiles/teams/:slug": "esports hub v3 phase 3: honours the legacy team_profile takedown and v3_profile_moderation; own tests in test/v3/profiles.test.ts",
+    "GET /public/scrims": "esports hub v3 phase 4: own report and auto-hide machinery (scrim_slots.hidden_at); no event; own tests in test/v3/scrims.test.ts",
+    "GET /public/scrims/:id": "esports hub v3 phase 4: same as GET /public/scrims",
+    "GET /public/tournament-directory": "esports hub v3 phase 5: events hidden by a takedown or a suspended organisation are skipped in SQL (directory-repo); own tests in test/v3/directory.test.ts",
     "GET /public/unsubscribe/:token": "must always work (legal duty to stop mail); no published content",
     "POST /public/unsubscribe/:token": "must always work (legal duty to stop mail); no published content",
   };

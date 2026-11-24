@@ -9,7 +9,7 @@ export const db = env.DB;
 export const nowSec = () => Math.floor(Date.now() / 1000);
 const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
 
-export type V3Flag = "v3.tournaments" | "v3.resume" | "v3.lft" | "v3.disputes" | "v3.discord" | "takedown.enforce" | "kill.directory" | "kill.public_writes" | "kill.uploads";
+export type V3Flag = "v3.tournaments" | "v3.resume" | "v3.lft" | "v3.disputes" | "v3.discord" | "v3.profiles" | "v3.scrims" | "v3.directory" | "takedown.enforce" | "kill.directory" | "kill.public_writes" | "kill.uploads";
 
 /** Turns exactly the listed flags ON (every other v3 flag is removed = default OFF) and forgets the isolate cache. */
 export async function flagsOn(...on: V3Flag[]): Promise<void> {
@@ -118,3 +118,15 @@ export const PNG = (n = 200, seed = 1): Uint8Array => {
   b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   return b;
 };
+
+/** The four flags production has ON since 15 Nov 2026 plus the given phase 3-5 flags (the phases must never ride on the live flags). */
+export const prodLikeOn = (...extra: V3Flag[]) => flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", ...extra);
+
+/** A team page (legacy team_profiles) owned by `ownerId`: private (published 0) unless `published`. Slug is 12 base32 characters like the real ones. */
+export async function ownTeamPage(ownerId: string, name = `Team ${uniq()}`, published = false): Promise<{ id: string; slug: string; name: string }> {
+  const id = crypto.randomUUID();
+  const b32 = "abcdefghijklmnopqrstuvwxyz234567";
+  const slug = Array.from(crypto.getRandomValues(new Uint8Array(12)), (x) => b32[x & 31]).join("");
+  await db.prepare("INSERT INTO team_profiles (id, owner_user_id, name, slug, published, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)").bind(id, ownerId, name, slug, published ? 1 : 0, new Date().toISOString()).run();
+  return { id, slug, name };
+}

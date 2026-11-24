@@ -95,3 +95,11 @@ export function validateContact(v: unknown): TextCheck {
   if (hasPhoneNumber(t)) return { ok: false, code: "has_phone" };
   return { ok: true, text: t };
 }
+
+/** An optional short PUBLIC note (scrim skill note, server name): 0 to `max` characters, no links, phone numbers or contact outside the site. "" when empty. */
+export function validatePublicNote(v: unknown, max: number): TextCheck {
+  if (v === undefined || v === null || v === "") return { ok: true, text: "" };
+  return validatePlain(v, max, 0, true);
+}
+/** An email address anywhere in the text (a scrim contact must be a platform handle, not an email). */
+export const hasEmail = (text: string): boolean => /[^\s@]+@[^\s@]+\.[^\s@]{2,}/.test(text);

@@ -30,3 +30,11 @@ export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 export const OUTBOX_STATUSES = ["pending", "running", "done", "failed", "dead"] as const;
 
 export const isOneOf = <T extends string>(list: readonly T[], v: unknown): v is T => typeof v === "string" && (list as readonly string[]).includes(v);
+
+// Phase 4: scrim finder (migration 0056)
+export const SCRIM_REGIONS = ["india", "south_asia", "asia_pacific", "middle_east", "europe", "americas", "other"] as const;
+export type ScrimRegion = (typeof SCRIM_REGIONS)[number];
+export const SCRIM_STATUSES = ["open", "full", "cancelled", "removed"] as const;
+export type ScrimStatus = (typeof SCRIM_STATUSES)[number];
+export const SCRIM_REQUEST_STATUSES = ["sent", "accepted", "declined", "withdrawn"] as const;
+export type ScrimRequestStatus = (typeof SCRIM_REQUEST_STATUSES)[number];

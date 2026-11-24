@@ -5,3 +5,6 @@ export const takedownEnforced = (db: D1Database): Promise<boolean> => getFlag(db
 
 /** Flag v3.discord (cached read, default OFF). The Discord drain and the approval hook ask this FIRST, before any v3 table. */
 export const discordEnabled = (db: D1Database): Promise<boolean> => getFlag(db, "v3.discord");
+
+/** Flag v3.scrims (cached read). The scheduled scrim work (recurring slots, waitlist offers) runs only while it is on. */
+export const scrimsEnabled = (db: D1Database): Promise<boolean> => getFlag(db, "v3.scrims");

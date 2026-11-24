@@ -4,6 +4,7 @@ import { resetFlagsCache } from "../../src/flags";
 import { V3_PERSONAL_TABLES, V3_TABLE_NAMES } from "../../src/v3/lib/personal-tables";
 import { buildV3Export, loadV3Export } from "../../src/v3/services/export-service";
 import { allV3On, api, db, disputeWorld, flagsOn, nowSec, PNG, user } from "./helpers";
+import { seedPhases } from "./phase-seed";
 
 vi.setConfig({ testTimeout: 120_000 });
 beforeAll(allV3On);
@@ -28,7 +29,7 @@ const FORBIDDEN_KEY = /ip_?hash|token|hash|sha|blob|^data$|^bytes$|attach|passwo
 
 /** One row of personal data in every v3 table, like test/v3/deletion.test.ts. `me` is a captain; `other` is the other team captain. */
 async function seed() {
-  await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "takedown.enforce");
+  await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.profiles", "v3.scrims", "v3.directory", "takedown.enforce");
   const mark = `XMARK${uniq()}`;
   const rid = `rbm${uniq()}`;
   const gid = `guild${uniq()}`;
@@ -63,7 +64,8 @@ async function seed() {
   await api(`/feedback/${fbMine.json.id}/attachments`, { raw: PNG(150, 77) as BodyInit, headers: { "content-type": "image/png", "x-attach-token": fbMine.json.attachToken } });
   const fbOther = await api("/feedback", { token: other.token, body: fb("OTHERFB") });
   expect(fbOther.status).toBe(201);
-  return { mark, rid, gid, w, me, other, slug, mine, mineD, fbMine, discordId };
+  const ph = await seedPhases({ w, me, other, mark, slug });
+  return { mark, rid, gid, w, me, other, slug, mine, mineD, fbMine, discordId, ph };
 }
 
 describe("POST /me/export, v3 section", () => {
@@ -75,7 +77,19 @@ describe("POST /me/export, v3 section", () => {
     const j = r.json;
     expect(j.exportVersion).toBe(2);
     expect(j.v3Truncated).toBeUndefined();
-    expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "lft", "resume"]);
+    expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "lft", "profiles", "resume", "scrims"]);
+    // phases 3-5: my team page settings and hidden entries; my scrim slots, the requests I SENT and the blocks I made (not who blocked me)
+    expect(Object.keys(j.v3.profiles).sort()).toEqual(["hiddenOnPlayerPage", "hiddenOnTeamPages", "teamPageSettings"]);
+    expect(j.v3.profiles.teamPageSettings).toEqual([{ teamPage: s.ph.myTeam.slug, name: s.ph.myTeam.name, visibility: "public", publicSince: expect.any(String) }]);
+    expect(j.v3.profiles.hiddenOnPlayerPage).toEqual([{ item: s.ph.itemKey, createdAt: expect.any(String) }]);
+    expect(j.v3.profiles.hiddenOnTeamPages).toEqual([{ teamPage: s.ph.myTeam.slug, item: s.ph.itemKey, createdAt: expect.any(String) }]);
+    expect(Object.keys(j.v3.scrims).sort()).toEqual(["blocksMade", "notices", "schedules", "sentRequestCount", "sentRequests", "slotCount", "slots", "waitlist"]);
+    expect(j.v3.scrims.slots).toEqual(expect.arrayContaining([expect.objectContaining({ id: s.ph.mySlot, contact: `${s.mark}c`, requestsReceived: 1 })]));
+    expect(j.v3.scrims.waitlist).toEqual([expect.objectContaining({ status: "offered" })]);
+    expect(j.v3.scrims.notices).toEqual([expect.objectContaining({ kind: "waitlist_offer", read: false })]);
+    expect(j.v3.scrims.schedules).toEqual([expect.objectContaining({ timeOfDayIst: "23:59", daysAhead: 3, contact: `${s.mark}s` })]);
+    expect(j.v3.scrims.sentRequests).toEqual(expect.arrayContaining([expect.objectContaining({ slotId: s.ph.theirSlot, status: "accepted", contact: `${s.mark}r` })]));
+    expect(j.v3.scrims.blocksMade).toEqual([{ team: "Beta Hawks Page", createdAt: expect.any(String) }]);
 
     // resume
     expect(Object.keys(j.v3.resume).sort()).toEqual(["adultConfirmedAt", "discordLinked", "games", "profile", "resumeConsentAt"]);
@@ -118,6 +132,10 @@ describe("POST /me/export, v3 section", () => {
       disputes: (v) => v.disputes.raised.length, dispute_evidence: (v) => v.disputes.raised.find((d: { id: string }) => d.id === s.mineD).evidence.length,
       v3_team_captains: (v) => v.disputes.captainClaims.length, feedback_reports: (v) => v.feedback.reports.length,
       feedback_attachments: () => "screenshots are not listed for feedback, only the report; the attachment bytes and tokens are never exported",
+      v3_team_pages: (v) => v.profiles.teamPageSettings.length, v3_player_hidden_items: (v) => v.profiles.hiddenOnPlayerPage.length,
+      v3_team_hidden_items: (v) => v.profiles.hiddenOnTeamPages.length, scrim_slots: (v) => v.scrims.slots.length,
+      scrim_requests: (v) => v.scrims.sentRequests.length, scrim_blocks: (v) => v.scrims.blocksMade.length,
+      scrim_waitlist: (v) => v.scrims.waitlist.length, scrim_notifications: (v) => v.scrims.notices.length, scrim_schedules: (v) => v.scrims.schedules.length,
     };
     for (const [t, c] of Object.entries(V3_PERSONAL_TABLES)) {
       if (c.export === "none") expect(c.why, `${t} needs a reason it is not exported`).toBeTruthy();
@@ -129,7 +147,7 @@ describe("POST /me/export, v3 section", () => {
     for (const t of Object.keys(present)) expect(V3_PERSONAL_TABLES[t], `${t} is checked here but missing from lib/personal-tables.ts`).toBeDefined();
 
     // nobody else's data, no secrets, no bytes
-    for (const needle of ["OTHERLISTING", "OTHERAPPLICATION", "OTHERDISPUTE", "OTHERCAPTION", "OTHERFB", s.other.id, s.other.email, s.discordId, s.fbMine.json.attachToken, "other#1", s.gid, `${s.mark} caption`, `${s.mark} my comment`]) {
+    for (const needle of ["OTHERSLOT", "OTHERREQUEST", "otherslot#1", "otherreq#1", "OTHERLISTING", "OTHERAPPLICATION", "OTHERDISPUTE", "OTHERCAPTION", "OTHERFB", s.other.id, s.other.email, s.discordId, s.fbMine.json.attachToken, "other#1", s.gid, `${s.mark} caption`, `${s.mark} my comment`]) {
       expect(r.text, needle).not.toContain(needle);
     }
     for (const k of keysOf(j)) expect(k, `key ${k}`).not.toMatch(FORBIDDEN_KEY);
@@ -168,6 +186,8 @@ describe("POST /me/export, v3 section", () => {
       lft: { listingCount: 0, listings: [], applicationsReceivedTotal: 0, sentApplicationCount: 0, sentApplications: [] },
       disputes: { raisedCount: 0, raised: [], evidenceOnOtherDisputes: [], captainClaims: [] },
       feedback: { reportCount: 0, reports: [] },
+      profiles: { teamPageSettings: [], hiddenOnPlayerPage: [], hiddenOnTeamPages: [] },
+      scrims: { slotCount: 0, slots: [], sentRequestCount: 0, sentRequests: [], blocksMade: [], schedules: [], waitlist: [], notices: [] },
     });
   });
 

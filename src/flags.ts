@@ -32,6 +32,10 @@ export interface Flags {
   "v3.lft": boolean;
   "v3.disputes": boolean;
   "v3.discord": boolean; // Discord automation (stage 3): install flow, /link, interactions endpoint, outbox drain
+  // Phases 3-5 (24 Nov 2026, migration 0056). Separate from v3.resume / v3.tournaments on purpose: those are ON in production, these stay OFF until the owner decides.
+  "v3.profiles": boolean; // public player profiles and team pages: Private / Link only / Public, certificates from verified results, report and hide
+  "v3.scrims": boolean; // scrim finder: captains post open scrim slots, other captains request, contact after accept
+  "v3.directory": boolean; // public tournament directory: upcoming public tournaments by game and city, optional public sign-up link
   "feedback.enabled": boolean; // on-page feedback bot (migration 0054): /feedback routes and the staff list. OFF = 404 before any feedback table is read
 }
 
@@ -58,6 +62,9 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "v3.lft": false,
   "v3.disputes": false,
   "v3.discord": false,
+  "v3.profiles": false,
+  "v3.scrims": false,
+  "v3.directory": false,
   "feedback.enabled": false,
 });
 

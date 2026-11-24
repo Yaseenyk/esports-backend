@@ -50,3 +50,15 @@ export interface CaptainRow { event_id: string; team_name: string; created_at: n
 export async function captainRows(db: D1Database, userId: string): Promise<CaptainRow[]> {
   return (await db.prepare("SELECT event_id, team_name, created_at FROM v3_team_captains WHERE user_id = ?1 ORDER BY created_at, event_id LIMIT 200").bind(userId).all<CaptainRow>()).results;
 }
+
+// ---------------- phases 3-5 (migration 0056)
+export interface TeamPageSettingRow { slug: string; name: string; visibility: string; public_since: number | null }
+export async function teamPageSettingRows(db: D1Database, userId: string): Promise<TeamPageSettingRow[]> {
+  return (await db.prepare("SELECT p.slug AS slug, p.name AS name, v.visibility AS visibility, v.public_since AS public_since FROM v3_team_pages v JOIN team_profiles p ON p.id = v.profile_id WHERE p.owner_user_id = ?1 ORDER BY p.slug LIMIT 50").bind(userId).all<TeamPageSettingRow>()).results;
+}
+export async function playerHiddenRows(db: D1Database, userId: string): Promise<{ item_key: string; created_at: number }[]> {
+  return (await db.prepare("SELECT item_key, created_at FROM v3_player_hidden_items WHERE user_id = ?1 ORDER BY created_at LIMIT 200").bind(userId).all<{ item_key: string; created_at: number }>()).results;
+}
+export async function teamHiddenRows(db: D1Database, userId: string): Promise<{ slug: string; item_key: string; created_at: number }[]> {
+  return (await db.prepare("SELECT p.slug AS slug, h.item_key AS item_key, h.created_at AS created_at FROM v3_team_hidden_items h JOIN team_profiles p ON p.id = h.profile_id WHERE p.owner_user_id = ?1 ORDER BY h.created_at LIMIT 500").bind(userId).all<{ slug: string; item_key: string; created_at: number }>()).results;
+}

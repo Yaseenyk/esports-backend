@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { uniq } from "../helpers";
-import { lftReporterHash } from "../../src/v3/lib/reporter";
+import { lftReporterHash, profileReporterHash, scrimReporterHash } from "../../src/v3/lib/reporter";
 import { resetFlagsCache } from "../../src/flags";
 import { V3_TABLE_NAMES } from "../../src/v3/lib/personal-tables";
 import { allV3On, api, db, disputeWorld, flagsOn, nowSec, PNG, user } from "./helpers";
+import { seedPhases } from "./phase-seed";
 
 vi.setConfig({ testTimeout: 120_000 });
 beforeAll(allV3On);
@@ -15,7 +16,7 @@ const dump = async (t: string) => JSON.stringify((await db.prepare(`SELECT * FRO
 
 describe("account deletion covers every v3 table", () => {
   it("one row of personal data in every new table for a user; deleting the account leaves none of it", async () => {
-    await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "takedown.enforce");
+    await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.profiles", "v3.scrims", "v3.directory", "takedown.enforce");
     const mark = `MARK${uniq()}`;
     const w = await disputeWorld();
     const me = w.a; // captain of Alpha Wolves
@@ -62,6 +63,9 @@ describe("account deletion covers every v3 table", () => {
     const fbOther = await api("/feedback", { token: other.token, body: fbBody("othermark") });
     expect(fbOther.status).toBe(201);
 
+    // phases 3-5: team page settings and hidden entries, profile reports both ways, scrim slots, requests, blocks and reports, the directory opt-in
+    const ph = await seedPhases({ w, me, other, mark, slug });
+
     // every v3 table has at least one row from this scenario (so the test really covers them all)
     for (const t of TABLES) expect((await db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first<{ n: number }>())!.n, `${t} has a row`).toBeGreaterThan(0);
     const before = (await Promise.all(TABLES.map(dump))).join("\n");
@@ -73,10 +77,18 @@ describe("account deletion covers every v3 table", () => {
     expect(del.status, del.text).toBe(200);
 
     // nothing personal is left in any v3 table
+    const pHash = await profileReporterHash(env, me.id);
+    const sHash = await scrimReporterHash(env, me.id);
     for (const t of TABLES) {
       const text = await dump(t);
-      for (const needle of [me.id, me.email, mark, hash]) expect(text, `${t} still holds ${needle}`).not.toContain(needle);
+      for (const needle of [me.id, me.email, mark, hash, pHash, sHash, ph.myTeam.id]) expect(text, `${t} still holds ${needle}`).not.toContain(needle);
     }
+    // the seat I held on the other captain's scrim is given back; their slot and my request to it are otherwise as before
+    expect(await db.prepare("SELECT slots_filled, status FROM scrim_slots WHERE id = ?1").bind(ph.theirSlot).first()).toEqual({ slots_filled: 0, status: "open" });
+    // the other captain's own rows survive: their team page setting, their slot, their block list (without me)
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM v3_team_pages WHERE profile_id = ?1").bind(ph.theirTeam.id).first<{ n: number }>())!.n).toBe(1);
+    expect((await api(`/public/profiles/players/${slug}`)).status).toBe(404);
+    expect((await api(`/public/profiles/teams/${ph.myTeam.slug}`)).status).toBe(404);
     // the linked feedback is DELETED (not just unlinked), with its screenshot; the other user's report stays
     expect(await db.prepare("SELECT id FROM feedback_reports WHERE id = ?1").bind(fbMine.json.id).first()).toBeNull();
     expect((await db.prepare("SELECT COUNT(*) AS n FROM feedback_attachments WHERE id = ?1").bind(fbShot.json.id).first<{ n: number }>())!.n).toBe(0);

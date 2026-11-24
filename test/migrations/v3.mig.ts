@@ -24,7 +24,8 @@ describe("0051 and 0052 on a populated database", () => {
     const added = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name).filter((n) => !tablesBefore.includes(n)).sort();
     expect(added).toEqual([
       "discord_guilds", "discord_link_codes", "discord_outbox", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "disputes", "feedback_attachment_blobs", "feedback_attachments", "feedback_reports", "lft_applications", "lft_listings", "lft_reports",
-      "player_games", "player_profiles", "tournaments", "v3_discord_settings", "v3_registration_discord", "v3_result_corrections", "v3_team_captains",
+      "player_games", "player_profiles", "scrim_blocks", "scrim_notifications", "scrim_reports", "scrim_requests", "scrim_schedule_days", "scrim_schedules", "scrim_slot_assignments", "scrim_slots", "scrim_waitlist", "tournaments", "v3_discord_settings", "v3_player_hidden_items", "v3_profile_moderation", "v3_profile_reports",
+      "v3_registration_discord", "v3_result_corrections", "v3_team_captains", "v3_team_hidden_items", "v3_team_pages", "v3_tournament_directory",
     ]);
     // the three new users columns are nullable and empty for every existing account
     expect(await one("SELECT COUNT(*) FROM users WHERE adult_confirmed_at IS NOT NULL OR resume_consent_at IS NOT NULL OR discord_user_id IS NOT NULL")).toBe(0);
