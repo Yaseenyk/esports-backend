@@ -178,10 +178,10 @@ export async function dismissReport(db: D1Database, reportId: string, l: Moderat
 
 export interface ActionRow { target: string; action: string; reason_code: string; note: string; staff_user_id: string; created_at: number }
 export async function actionsOf(db: D1Database, ratingId: string): Promise<ActionRow[]> {
-  return (await db.prepare("SELECT target, action, reason_code, note, staff_user_id, created_at FROM organiser_rating_actions WHERE rating_id = ?1 ORDER BY created_at, id LIMIT 200").bind(ratingId).all<ActionRow>()).results;
+  return (await db.prepare("SELECT target, action, reason_code, note, staff_user_id, created_at FROM organiser_rating_actions WHERE rating_id = ?1 ORDER BY created_at, rowid LIMIT 200").bind(ratingId).all<ActionRow>()).results;
 }
 export async function reportsOf(db: D1Database, ratingId: string): Promise<{ id: string; target: string; reason_code: string; note: string; status: string; created_at: number }[]> {
-  return (await db.prepare("SELECT id, target, reason_code, note, status, created_at FROM organiser_rating_reports WHERE rating_id = ?1 ORDER BY created_at, id LIMIT 200").bind(ratingId).all<{ id: string; target: string; reason_code: string; note: string; status: string; created_at: number }>()).results;
+  return (await db.prepare("SELECT id, target, reason_code, note, status, created_at FROM organiser_rating_reports WHERE rating_id = ?1 ORDER BY created_at, rowid LIMIT 200").bind(ratingId).all<{ id: string; target: string; reason_code: string; note: string; status: string; created_at: number }>()).results;
 }
 
 /** For "my ratings": the user's own rows with the tournament slug and title. */

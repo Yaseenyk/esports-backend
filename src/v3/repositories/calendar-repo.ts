@@ -119,5 +119,5 @@ export async function setHidden(db: D1Database, id: string, hidden: { at: number
 
 export interface EntryActionRow { action: string; reason_code: string; note: string; staff_user_id: string; created_at: number }
 export async function actionsOf(db: D1Database, id: string): Promise<EntryActionRow[]> {
-  return (await db.prepare("SELECT action, reason_code, note, staff_user_id, created_at FROM calendar_entry_actions WHERE entry_id = ?1 ORDER BY created_at, id LIMIT 100").bind(id).all<EntryActionRow>()).results;
+  return (await db.prepare("SELECT action, reason_code, note, staff_user_id, created_at FROM calendar_entry_actions WHERE entry_id = ?1 ORDER BY created_at, rowid LIMIT 100").bind(id).all<EntryActionRow>()).results;
 }

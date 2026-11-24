@@ -23,7 +23,7 @@ describe("0054 on a populated database", () => {
     expect(await snapshot()).toEqual(before);
     expect((await env.DB.prepare("SELECT id, email, name, status FROM users ORDER BY id").all()).results).toEqual(usersBefore);
     const added = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name).filter((n) => !tablesBefore.includes(n)).sort();
-    expect(added.filter((n) => !/^(calendar_entr|organiser_rating)/.test(n))).toEqual(["feedback_attachment_blobs", "feedback_attachments", "feedback_reports", "scrim_blocks", "scrim_reports", "scrim_requests", "scrim_slots", "v3_player_hidden_items", "v3_profile_moderation", "v3_profile_reports", "v3_team_hidden_items", "v3_team_pages", "v3_tournament_directory", "scrim_slot_assignments", "scrim_waitlist", "scrim_notifications", "scrim_schedules", "scrim_schedule_days"].sort()); // + the later 0056 tables
+    expect(added.filter((n) => !/^(calendar_entr|organiser_rating)/.test(n))).toEqual(["feedback_attachment_blobs", "feedback_attachments", "feedback_reports", "scrim_blocks", "scrim_reports", "scrim_requests", "scrim_slots", "v3_player_hidden_items", "v3_profile_moderation", "v3_profile_reports", "v3_team_hidden_items", "v3_team_pages", "v3_tournament_directory", "scrim_slot_assignments", "scrim_waitlist", "scrim_notifications", "scrim_schedules", "scrim_schedule_days", "v3_match_rooms", "v3_room_views"].sort()); // + the later 0056 and 0070 tables
     expect(await one("SELECT COUNT(*) FROM sqlite_master WHERE name = 'trg_feedback_attachments_max2'")).toBe(1);
     expect(await foreignKeyViolations()).toEqual([]);
     for (const t of added) {
