@@ -69,6 +69,12 @@ export const AUDIT_ACTIONS = {
   "admin.suspend": NONE,
   "admin.session": NONE,
   "feedback.updated": { status: ["new", "triaged", "fixed", "wontfix"] },
+  // staff console (overview, organisation approvals, users, content hub): ids and reason codes only, never an email or the text
+  "admin.email_revealed": NONE,
+  "org.verified": NONE,
+  "org.unverified": NONE,
+  "content.hidden": { kind: ["scrim", "lft"] },
+  "content.restored": { kind: ["scrim", "lft"] },
   // community moderation (organiser trust reviews, calendar entries): reason in reason_code, never the text
   "trust.hidden": { target: ["review", "reply"] },
   "trust.restored": { target: ["review", "reply"] },

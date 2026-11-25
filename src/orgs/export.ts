@@ -7,7 +7,8 @@ import { buildV3Export, loadV3Export, MAX_TRUNCATION_LEVEL, V3_EXPORT_NOT_INCLUD
  *
  * Contains: the account fields (never the password hash or salt), organisation memberships, the list of events the user can reach with metadata and
  * COUNTS, the user's brand kits and their team profiles.
- * Since exportVersion 2 it also has a `v3` section (Esports Resume, Looking-for-team board, disputes raised, feedback sent): only the user's OWN rows, built by
+ * Since exportVersion 2 it also has a `v3` section (Esports Resume, Looking-for-team board, disputes raised, feedback sent, organiser ratings written and the
+ * ratings of the organisations the user is an admin of, with their replies): only the user's OWN rows, built by
  * v3/services/export-service.ts, the same personal data account deletion covers (lib/personal-tables.ts). This file never queries v3 tables.
  * Does NOT contain: rosters, people, photos, registrations, result proofs, check-ins, contact messages or invitation rows. Those hold other people's
  * data (many of them minors); an organiser exports them per event with the tools that already exist.

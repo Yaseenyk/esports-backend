@@ -1,5 +1,5 @@
 /** v3 rows to the "Download my data" JSON. Builds payloads only: no SQL, repositories as type imports. Never emits other people's ids, hashes, tokens or bytes. */
-import type { AccountV3Row, CaptainRow, DisputeRow, EvidenceMetaRow, GameRow, ListingRow, ProfileRow, SentApplicationRow, TeamPageSettingRow } from "../repositories/export-repo";
+import type { AccountV3Row, CaptainRow, DisputeRow, EvidenceMetaRow, GameRow, ListingRow, ProfileRow, RatingReceivedRow, RatingWrittenRow, SentApplicationRow, TeamPageSettingRow } from "../repositories/export-repo";
 import type { RequestExportRow, SlotExportRow } from "../repositories/scrim-repo";
 import type { FeedbackExportRow } from "../repositories/feedback-repo";
 import { toIso } from "../lib/ids";
@@ -24,8 +24,10 @@ export interface V3ExportInput {
   slots?: SlotExportRow[]; scrimRequests?: RequestExportRow[]; blocks?: { label: string; created_at: number }[];
   schedules?: { game: string; time_of_day: string; days_ahead: number; region: string; slots_total: number; contact: string; active: number; created_at: number }[];
   waitlistEntries?: { slot_id: string; status: string; created_at: number }[]; notices?: { kind: string; created_at: number; read_at: number | null }[];
+  // organiser trust (migration 0080): ratings the user wrote, and ratings of the organisations they are an admin of
+  ratingsWritten?: RatingWrittenRow[]; ratingsReceived?: RatingReceivedRow[];
 }
-/** 0 = everything; 1 = feedback reduced to a count; 2 = also LFT listings and sent applications; 3 = also raised disputes (all reduced to counts). */
+/** 0 = everything; 1 = feedback reduced to a count; 2 = also LFT listings, sent applications and ratings received; 3 = also raised disputes (all reduced to counts). */
 export type TruncationLevel = 0 | 1 | 2 | 3;
 export const MAX_TRUNCATION_LEVEL: TruncationLevel = 3;
 
@@ -67,6 +69,12 @@ export function buildV3Export(i: V3ExportInput, level: TruncationLevel = 0) {
       schedules: (i.schedules ?? []).map((s) => ({ game: s.game, timeOfDayIst: s.time_of_day, daysAhead: s.days_ahead, region: s.region, slots: s.slots_total, contact: s.contact, active: s.active === 1, createdAt: toIso(s.created_at) })),
       waitlist: (i.waitlistEntries ?? []).map((w) => ({ slotId: w.slot_id, status: w.status, createdAt: toIso(w.created_at) })),
       notices: (i.notices ?? []).map((n) => ({ kind: n.kind, createdAt: toIso(n.created_at), read: n.read_at !== null })),
+    },
+    ratings: {
+      writtenCount: (i.ratingsWritten ?? []).length,
+      written: (i.ratingsWritten ?? []).map((r) => ({ id: r.id, eventId: r.event_id, event: r.event_name, displayName: r.display_name, stars: r.stars, onTime: r.on_time, fair: r.fair_play, communication: r.communication, review: r.review, organiserReply: r.reply, organiserReplyAt: toIso(r.reply_at), hiddenByModerators: r.hidden_at !== null, replyHiddenByModerators: r.reply_hidden_at !== null, createdAt: toIso(r.created_at), updatedAt: toIso(r.updated_at) })),
+      receivedCount: (i.ratingsReceived ?? []).length,
+      received: level >= 2 ? [] : (i.ratingsReceived ?? []).map((r) => ({ id: r.id, orgId: r.org_id, organisation: r.org_name, eventId: r.event_id, event: r.event_name, reviewerDisplayName: r.display_name, stars: r.stars, onTime: r.on_time, fair: r.fair_play, communication: r.communication, review: r.review, reply: r.reply, replyAt: toIso(r.reply_at), replyHiddenByModerators: r.reply_hidden === 1, createdAt: toIso(r.created_at) })),
     },
     feedback: {
       reportCount: i.feedback.length,

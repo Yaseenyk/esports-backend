@@ -27,9 +27,10 @@ describe("GET /admin/v1/flags", () => {
     expect(r.status).toBe(200);
     expect(r.json.flags.map((f: { key: string }) => f.key).sort()).toEqual(Object.keys(FLAG_DEFAULTS).sort());
     for (const f of r.json.flags) {
-      expect(Object.keys(f).sort()).toEqual(["default", "key", "reasonCode", "settable", "stepUp", "updatedAt", "updatedBy", "value"]);
+      expect(Object.keys(f).sort()).toEqual(["default", "description", "key", "reasonCode", "settable", "stepUp", "updatedAt", "updatedBy", "value"]);
       expect(f.settable).toBe((SETTABLE_FLAGS as readonly string[]).includes(f.key));
       expect(f.stepUp).toBe((KILL_KEYS as readonly string[]).includes(f.key));
+      expect(typeof f.description === "string" && f.description.length > 5, f.key).toBe(true);
     }
   });
 });

@@ -10,7 +10,7 @@
  */
 import { Hono } from "hono";
 import { auditStmts } from "../audit";
-import { FLAG_DEFAULTS, getFlagFresh, resetFlagsCache, type FlagKey } from "../flags";
+import { FLAG_DEFAULTS, FLAG_NOTES, getFlagFresh, resetFlagsCache, type FlagKey } from "../flags";
 import { HttpError, readJson } from "../http";
 import { KILL_KEYS } from "./kill";
 import { requireStepUp, type AdminBindings } from "./session";
@@ -39,6 +39,7 @@ flagRoutes.get("/flags", async (c) => {
       key,
       value: await getFlagFresh(c.env.DB, key),
       default: FLAG_DEFAULTS[key],
+      description: FLAG_NOTES[key],
       settable: SETTABLE_FLAGS.includes(key),
       stepUp: isStepUpKey(key),
       updatedAt: row ? row.updated_at : null,

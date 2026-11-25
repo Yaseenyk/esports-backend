@@ -66,12 +66,13 @@ describe("lookup: metadata only, response key snapshot", () => {
     expect(miss.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("exact match only: a prefix or a partial email finds nothing; there is no list route", async () => {
+  it("exact match only: a prefix or a partial email finds nothing; lookup itself has no list route", async () => {
     const { token } = await staffToken();
     const u = await newUser("Exact");
     expect((await api(`/admin/v1/lookup?email=${encodeURIComponent(u.email.slice(0, -4))}`, { token })).status).toBe(404);
     expect((await api(`/admin/v1/lookup?id=${u.id.slice(0, 10)}`, { token })).status).toBe(404);
-    expect((await api("/admin/v1/users", { token })).status).toBe(404);
+    // the user LIST is a separate console route (test/admin/console.test.ts): emails masked, a full email only through the audited reveal
+    expect((await api("/admin/v1/lookup/users", { token })).status).toBe(404);
     expect((await api("/admin/v1/lookup/export", { token })).status).toBe(404);
   });
 });

@@ -78,6 +78,39 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "feedback.enabled": false,
 });
 
+/** One plain sentence per flag for the staff console's Switches page (GET /admin/v1/flags `description`). Every key has one (test/admin/flags.test.ts). */
+export const FLAG_NOTES: Readonly<Record<FlagKey, string>> = Object.freeze({
+  "authz.mode": "How event access is decided: legacy, shadow (compare and log) or org. Runbook SQL only.",
+  "orgs.team": "Clubs: turn a personal space into a team organisation and invite helpers. Runbook SQL only.",
+  "audit.off": "Stops writing the activity log. Emergency only. Runbook SQL only.",
+  "shed.tracking": "Automatic: usage counting is shed when the database is under pressure.",
+  "kill.public_forms": "Stops registration and invite forms.",
+  "kill.directory": "Stops adding to and reporting on the public directory.",
+  "kill.team_pages": "Stops changes to public team pages.",
+  "kill.uploads": "Stops photo and file uploads.",
+  "kill.mail": "Stops all email (reminders and password resets).",
+  "kill.tracking": "Stops usage counting.",
+  "kill.public_writes": "The big switch: stops every public form and action that saves something.",
+  "kill.feedback": "Stops new feedback and its screenshots and hides the feedback button.",
+  "admin.enabled": "The staff console itself. Off = every staff route answers 404. Runbook SQL only.",
+  "takedown.enforce": "Hide taken-down pages and pages of suspended organisations from the public.",
+  "auth.verify_required": "New password sign-ups must confirm their email first.",
+  "v3.tournaments": "Public tournament pages.",
+  "v3.resume": "Esports Resume (player history from verified results).",
+  "v3.lft": "Looking for team / player board.",
+  "v3.disputes": "Dispute portal for match results.",
+  "v3.discord": "Discord automation: install, /link, interactions and the outbox.",
+  "v3.profiles": "Public player profiles and team pages (Private, Link only, Public), report and hide.",
+  "v3.scrims": "Scrim finder: captains post open slots, others request, contact after accept.",
+  "v3.rooms": "Organiser tool: match room ID and password for confirmed captains.",
+  "v3.recaps": "Organiser tool: match recap facts for the template recap and picture.",
+  "v3.screenshots": "Organiser tool: save battle royale results read from a screenshot (every row confirmed).",
+  "v3.directory": "Public tournament directory by game and city.",
+  "v3.calendar": "College esports calendar: verified organisations list their events.",
+  "v3.trust": "Organiser trust score: proof-based ratings, reviews, replies and reports.",
+  "feedback.enabled": "On-page feedback bot and the staff feedback inbox.",
+});
+
 export const FLAG_CACHE_MS = 10_000;
 const AUTHZ_MODES: readonly string[] = ["legacy", "shadow", "org"];
 

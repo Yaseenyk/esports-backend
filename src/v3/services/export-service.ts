@@ -14,6 +14,7 @@ export const V3_EXPORT_NOT_INCLUDED = [
   "screenshot images (dispute evidence and feedback attachments): only their type, size and date are listed",
   "other people's data: applications to your listings (counted only), the other team's evidence, other people's reports",
   "secrets and security data: tokens, hashes, IP-derived values, your Discord account id (only whether one is linked)",
+  "reviews of your organisation that moderators hid, and who wrote a review (only the name they chose to show is listed)",
 ] as const;
 
 export async function loadV3Export(db: D1Database, userId: string): Promise<V3ExportInput> {
@@ -21,6 +22,7 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
   const has = (n: string) => t.has(n);
   const empty = <T>(): Promise<T[]> => Promise.resolve([]);
   const feedbackOk = await feedbackTablesExist(db);
+  const ratingsOk = await repo.ratingTableExists(db);
   const [account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices] = await Promise.all([
     repo.accountRow(db, userId),
     has("player_profiles") ? repo.profileRow(db, userId) : Promise.resolve(null),
@@ -41,7 +43,10 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
     has("scrim_waitlist") ? manager.exportEntries(db, userId) : empty<{ slot_id: string; status: string; created_at: number }>(),
     has("scrim_notifications") ? manager.exportNotices(db, userId) : empty<{ kind: string; created_at: number; read_at: number | null }>(),
   ]);
-  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices };
+  const [ratingsWritten, ratingsReceived] = ratingsOk
+    ? await Promise.all([repo.ratingsWrittenRows(db, userId), repo.ratingsReceivedRows(db, userId)])
+    : [[] as repo.RatingWrittenRow[], [] as repo.RatingReceivedRow[]];
+  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices, ratingsWritten, ratingsReceived };
 }
 
 export { buildV3Export, MAX_TRUNCATION_LEVEL, type TruncationLevel, type V3ExportInput };

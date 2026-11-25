@@ -1,4 +1,6 @@
 import type { FeatureRoutes } from "./types";
+import { CONSOLE_ROUTES } from "../../src/admin/console";
+import { CONTENT_ROUTES } from "../../src/admin/content";
 
 // Stream S (Phase 1): /admin/v1 staff routes (src/admin/routes.ts). They are not event routes and take no user capability, so they sit in
 // publicRoutes (exempt from the "anonymous gets 401" sweep). The staff matrix (test/admin/staff-matrix.test.ts) proves the real rule: every one
@@ -24,6 +26,9 @@ const feature: FeatureRoutes = {
     { method: "GET", path: "/admin/v1/takedowns" },
     { method: "POST", path: "/admin/v1/takedowns" },
     { method: "POST", path: "/admin/v1/takedowns/:type/:id/restore" },
+    // staff console (overview, organisation approvals, users) and the content hub
+    ...CONSOLE_ROUTES,
+    ...CONTENT_ROUTES,
   ],
 };
 export default feature;

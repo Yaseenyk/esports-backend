@@ -22,7 +22,7 @@ import type { ACtx, AdminBindings } from "./session";
 
 export const moderationRoutes = new Hono<AdminBindings>();
 
-function failure(code: string): HttpError {
+export function failure(code: string): HttpError {
   switch (code) {
     case "not_found": return new HttpError(404, "Not found");
     case "conflict_of_interest": return new HttpError(403, "This concerns your own organisation's event: another staff member must decide", { code });
@@ -32,7 +32,7 @@ function failure(code: string): HttpError {
   }
 }
 
-const cursor = (v: string | undefined): number => {
+export const cursor = (v: string | undefined): number => {
   if (v === undefined || v === "") return 0;
   const n = Number(v);
   if (!Number.isInteger(n) || n < 0 || n > 100_000) throw new HttpError(400, "after is not valid");
@@ -75,7 +75,7 @@ moderationRoutes.get("/takedowns", async (c) => {
 });
 
 /** The event and organisation a target hangs off, from the database (never from the caller). Null when the target does not exist. */
-async function derive(db: D1Database, type: TargetType, id: string): Promise<{ eventId: string | null; orgId: string | null } | null> {
+export async function derive(db: D1Database, type: TargetType, id: string): Promise<{ eventId: string | null; orgId: string | null } | null> {
   type Row = { event_id: string | null; org_id: string | null };
   let r: Row | null;
   switch (type) {

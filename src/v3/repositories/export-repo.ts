@@ -62,3 +62,22 @@ export async function playerHiddenRows(db: D1Database, userId: string): Promise<
 export async function teamHiddenRows(db: D1Database, userId: string): Promise<{ slug: string; item_key: string; created_at: number }[]> {
   return (await db.prepare("SELECT p.slug AS slug, h.item_key AS item_key, h.created_at AS created_at FROM v3_team_hidden_items h JOIN team_profiles p ON p.id = h.profile_id WHERE p.owner_user_id = ?1 ORDER BY h.created_at LIMIT 500").bind(userId).all<{ slug: string; item_key: string; created_at: number }>()).results;
 }
+
+// ---------------- organiser trust ratings (migration 0080; not in lib/personal-tables.ts because the community tables are checked on their own)
+export async function ratingTableExists(db: D1Database): Promise<boolean> {
+  return (await db.prepare("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = 'organiser_ratings'").first()) !== null;
+}
+/** Ratings THIS user wrote, with the organiser's reply to each (it is part of the same thread). Never the proof reference or who replied. */
+export interface RatingWrittenRow { id: string; event_id: string; event_name: string | null; display_name: string; stars: number; on_time: number; fair_play: number; communication: number; review: string | null; reply: string | null; reply_at: number | null; hidden_at: number | null; reply_hidden_at: number | null; created_at: number; updated_at: number }
+export async function ratingsWrittenRows(db: D1Database, userId: string): Promise<RatingWrittenRow[]> {
+  return (await db.prepare("SELECT r.id AS id, r.event_id AS event_id, e.name AS event_name, r.display_name AS display_name, r.stars AS stars, r.on_time AS on_time, r.fair_play AS fair_play, r.communication AS communication, r.review AS review, CASE WHEN r.reply_hidden_at IS NULL THEN r.reply ELSE NULL END AS reply, r.reply_at AS reply_at, r.hidden_at AS hidden_at, r.reply_hidden_at AS reply_hidden_at, r.created_at AS created_at, r.updated_at AS updated_at FROM organiser_ratings r LEFT JOIN events e ON e.id = r.event_id WHERE r.user_id = ?1 ORDER BY r.created_at DESC, r.id LIMIT 500").bind(userId).all<RatingWrittenRow>()).results;
+}
+/**
+ * Ratings OF the organisations this user is an admin of (the organisation's own reviews), with the organisation's replies. Only what the public page
+ * shows about the rater: the display name they chose for the review. Never their account id or email. Reviews staff hid are left out (they were hidden
+ * for abuse or personal details), and so is a hidden reply's text.
+ */
+export interface RatingReceivedRow { id: string; org_id: string; org_name: string; event_id: string; event_name: string | null; display_name: string; stars: number; on_time: number; fair_play: number; communication: number; review: string | null; reply: string | null; reply_at: number | null; reply_hidden: number; created_at: number }
+export async function ratingsReceivedRows(db: D1Database, userId: string): Promise<RatingReceivedRow[]> {
+  return (await db.prepare("SELECT r.id AS id, o.id AS org_id, o.name AS org_name, r.event_id AS event_id, e.name AS event_name, r.display_name AS display_name, r.stars AS stars, r.on_time AS on_time, r.fair_play AS fair_play, r.communication AS communication, r.review AS review, CASE WHEN r.reply_hidden_at IS NULL THEN r.reply ELSE NULL END AS reply, r.reply_at AS reply_at, CASE WHEN r.reply_hidden_at IS NULL THEN 0 ELSE 1 END AS reply_hidden, r.created_at AS created_at FROM org_members m JOIN organisations o ON o.id = m.org_id JOIN organiser_ratings r ON r.organiser_key = 'org:' || o.id LEFT JOIN events e ON e.id = r.event_id WHERE m.user_id = ?1 AND m.role = 'admin' AND r.hidden_at IS NULL ORDER BY r.created_at DESC, r.id LIMIT 2000").bind(userId).all<RatingReceivedRow>()).results;
+}

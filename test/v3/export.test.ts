@@ -81,7 +81,7 @@ describe("POST /me/export, v3 section", () => {
     const j = r.json;
     expect(j.exportVersion).toBe(2);
     expect(j.v3Truncated).toBeUndefined();
-    expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "lft", "profiles", "resume", "scrims"]);
+    expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "lft", "profiles", "ratings", "resume", "scrims"]);
     // phases 3-5: my team page settings and hidden entries; my scrim slots, the requests I SENT and the blocks I made (not who blocked me)
     expect(Object.keys(j.v3.profiles).sort()).toEqual(["hiddenOnPlayerPage", "hiddenOnTeamPages", "teamPageSettings"]);
     expect(j.v3.profiles.teamPageSettings).toEqual([{ teamPage: s.ph.myTeam.slug, name: s.ph.myTeam.name, visibility: "public", publicSince: expect.any(String) }]);
@@ -192,6 +192,7 @@ describe("POST /me/export, v3 section", () => {
       feedback: { reportCount: 0, reports: [] },
       profiles: { teamPageSettings: [], hiddenOnPlayerPage: [], hiddenOnTeamPages: [] },
       scrims: { slotCount: 0, slots: [], sentRequestCount: 0, sentRequests: [], blocksMade: [], schedules: [], waitlist: [], notices: [] },
+      ratings: { writtenCount: 0, written: [], receivedCount: 0, received: [] },
     });
   });
 
