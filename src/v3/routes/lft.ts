@@ -8,6 +8,7 @@ import {
   respondToApplication, withdrawApplication,
 } from "../services/lft-service";
 import { lftReporterHash } from "../lib/reporter";
+import { blockFromRequest, myBlocks, reportRequest, unblock } from "../services/lft-match-service";
 import { cachedJson, flagGate, killMw, killReadMw, noStore } from "./common";
 
 export const lftRoutes = new Hono<AppBindings>();
@@ -78,4 +79,27 @@ lftRoutes.post("/v3/lft/:id/report", gate, writes, requireUser, async (c) => {
   if (!uid) throw new HttpError(401, "Authentication required");
   const reporter = await lftReporterHash(c.env, uid);
   return c.json(await reportListing(c.env.DB, reporter, uid, idOf(c.req.param("id")), b), 202);
+});
+
+// ---- team matching (flag v3.lft_match on top of v3.lft): block and report on requests to join ----
+const matchGate = flagGate("v3.lft_match");
+lftRoutes.post("/v3/lft-applications/:id/block", gate, matchGate, writes, requireUser, async (c) => {
+  noStore(c);
+  await rateLimitSubject(c, "lft-block", c.get("userId"), 30, 3600);
+  return c.json(await blockFromRequest(c.env.DB, c.get("userId"), idOf(c.req.param("id"))));
+});
+lftRoutes.get("/v3/me/lft-blocks", gate, matchGate, requireUser, async (c) => {
+  noStore(c);
+  return c.json(await myBlocks(c.env.DB, c.get("userId")));
+});
+lftRoutes.delete("/v3/me/lft-blocks/:id", gate, matchGate, requireUser, async (c) => {
+  noStore(c);
+  return c.json(await unblock(c.env.DB, c.get("userId"), idOf(c.req.param("id"))));
+});
+lftRoutes.post("/v3/lft-applications/:id/report", gate, matchGate, writes, requireUser, async (c) => {
+  noStore(c);
+  const uid = c.get("userId");
+  await rateLimitSubject(c, "lft-report", uid, 20, 3600);
+  const b = await readJson(c, 2_000);
+  return c.json(await reportRequest(c.env.DB, await lftReporterHash(c.env, uid), uid, idOf(c.req.param("id")), b), 202);
 });

@@ -24,6 +24,7 @@ import { api } from "./api/routes";
 import { v3 } from "./v3/routes";
 import { runDiscordDrain } from "./v3/services/discord-drain-service";
 import { discordConfigFromEnv } from "./v3/services/discord-service";
+import { runB2cCron } from "./v3/services/b2c-cron";
 
 const app = new Hono<AppBindings>();
 
@@ -92,6 +93,8 @@ Object.assign(app, {
     scheduled(c, e, x);
     x.waitUntil(linksBackfillTick(c.scheduledTime, e)); // S7 phase A: hash old clear tokens a few rows at a time
     // v3 Discord outbox: a no-op unless flag v3.discord is on AND the bot secrets are set (jobs then stay pending). Bounded: 10 jobs, 25 Discord calls, ~24 queries.
+    // Builder B (migration 0090): planner and alert retention on the daily tick, the alerts digest inside its window. Each is a no-op before the migration or with its flag off.
+    x.waitUntil(runB2cCron(e, c.scheduledTime).then(() => undefined, () => { console.error("b2c cron failed"); }));
     x.waitUntil(runDiscordDrain(e.DB, discordConfigFromEnv(e), { now: Math.floor(c.scheduledTime / 1000) }).then(() => undefined, () => { console.error("discord drain failed"); }));
   },
 });

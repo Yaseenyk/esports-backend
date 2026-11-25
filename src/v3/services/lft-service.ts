@@ -9,6 +9,8 @@ import * as flags from "../repositories/flag-repo";
 import * as repo from "../repositories/lft-repo";
 import * as users from "../repositories/user-repo";
 import { decodeCursor, encodeCursor, toApplicationForApplicant, toApplicationForAuthor, toOwnListing, toPublicListing } from "../adapters/lft-adapter";
+import { lftMatchEnabled } from "../repositories/flag-repo";
+import * as match from "./lft-match-service";
 
 type Body = Record<string, unknown>;
 
@@ -32,6 +34,7 @@ function textOr400(r: ReturnType<typeof validateLftMessage>, field: string): str
 
 // ---------------- public ----------------
 export async function publicList(db: D1Database, q: Record<string, string | undefined>) {
+  if (await lftMatchEnabled(db)) return match.publicListMatch(db, q);
   const game = q.game === undefined ? undefined : reqEnum(q.game, GAMES, "game");
   const kind = q.kind === undefined ? undefined : reqEnum(q.kind, LFT_KINDS, "kind");
   const role = q.role === undefined ? undefined : reqEnum(q.role, PLAYER_ROLES, "role");
@@ -80,7 +83,9 @@ export async function createListing(db: D1Database, userId: string, b: Body) {
   const city = optText(b.city, "city", 60);
   const onlineOk = optBoolean(b.onlineOk, "onlineOk") ?? true;
   const message = textOr400(validateLftMessage(b.message), "message");
-  const contact = textOr400(validateContact(b.contact), "contact");
+  const matchOn = await lftMatchEnabled(db);
+  const prefs = matchOn ? match.readListingPrefs(b) : null;
+  const contact = prefs?.contacts && (b.contact === undefined || b.contact === "") ? prefs.firstContact : textOr400(validateContact(b.contact), "contact");
   const days = optInt(b.expiresInDays, "expiresInDays", 1, LFT.MAX_DAYS) ?? LFT.DEFAULT_DAYS;
 
   let teamProfileId: string | null = null;
@@ -97,11 +102,14 @@ export async function createListing(db: D1Database, userId: string, b: Body) {
   const id = newId();
   const ok = await repo.insertListingCapped(db, { id, kind, authorUserId: userId, teamProfileId, game, roles: JSON.stringify(roles), rankMinOrdinal: rankMin ?? null, rankMaxOrdinal: rankMax ?? null, state: state ?? null, city: city ?? null, onlineOk, message, contact, expiresAt: at + days * 86_400, lastBumpedAt: at }, LFT.OPEN_CAP);
   if (!ok) throw new HttpError(409, `You can have at most ${LFT.OPEN_CAP} open listings`, { code: "listing_cap" });
-  return toOwnListing((await repo.findListing(db, id))!);
+  if (prefs) await match.saveListingPrefs(db, id, prefs);
+  const own = toOwnListing((await repo.findListing(db, id))!);
+  return matchOn ? { ...own, ...(await match.ownPrefs(db, id)) } : own;
 }
 
 export async function myListings(db: D1Database, userId: string) {
-  return { items: (await repo.listMine(db, userId)).map(toOwnListing) };
+  const items = (await repo.listMine(db, userId)).map(toOwnListing);
+  return { items: (await lftMatchEnabled(db)) ? await match.withOwnPrefs(db, items) : items };
 }
 
 async function ownListing(db: D1Database, userId: string, id: string) {
@@ -132,22 +140,29 @@ export async function applyToListing(db: D1Database, userId: string, listingId: 
   if (!l) throw new HttpError(404, "Not found");
   const full = (await repo.findListing(db, listingId))!;
   if (full.authorUserId === userId) throw new HttpError(403, "You cannot apply to your own listing", { code: "own_listing" });
+  const matchOn = await lftMatchEnabled(db);
+  // A block either way answers exactly like a listing that is gone.
+  if (matchOn && (await match.blockedEitherWay(db, userId, full.authorUserId))) throw new HttpError(404, "Not found");
   const message = textOr400(validateApplicationMessage(b.message), "message");
-  const contact = textOr400(validateContact(b.contact), "contact");
+  const chosen = matchOn ? match.readApplicationContacts(b) : null;
+  const contact = chosen && (b.contact === undefined || b.contact === "") ? chosen.first : textOr400(validateContact(b.contact), "contact");
   const id = newId();
   if (!(await repo.insertApplication(db, { id, listingId, applicantUserId: userId, message, contact, createdAt: nowSec() }))) {
     throw new HttpError(409, "You have already applied to this listing", { code: "already_applied" });
   }
+  if (chosen) await match.saveApplicationContacts(db, id, chosen.contacts);
   return { id, status: "sent" as const };
 }
 
 export async function listingApplications(db: D1Database, userId: string, listingId: string) {
   const l = await ownListing(db, userId, listingId);
-  return { items: (await repo.listApplicationsForListing(db, l.id)).map(toApplicationForAuthor) };
+  const items = (await repo.listApplicationsForListing(db, l.id)).map(toApplicationForAuthor);
+  return { items: (await lftMatchEnabled(db)) ? await match.withApplicantContacts(db, items) : items };
 }
 
 export async function myApplications(db: D1Database, userId: string) {
-  return { items: (await repo.listMyApplications(db, userId)).map(toApplicationForApplicant) };
+  const items = (await repo.listMyApplications(db, userId)).map(toApplicationForApplicant);
+  return { items: (await lftMatchEnabled(db)) ? await match.withListingContacts(db, items) : items };
 }
 
 export async function respondToApplication(db: D1Database, userId: string, applicationId: string, b: Body) {
@@ -156,8 +171,8 @@ export async function respondToApplication(db: D1Database, userId: string, appli
   if (!a || !l || l.authorUserId !== userId) throw new HttpError(404, "Not found");
   const decision = reqEnum(b.decision, ["accept", "decline"] as const, "decision");
   if (!(await repo.setApplicationStatus(db, a.id, decision === "accept" ? "accepted" : "declined", nowSec()))) throw new HttpError(409, "This application is already answered", { code: "already_answered" });
-  const fresh = (await repo.listApplicationsForListing(db, l.id)).find((x) => x.id === a.id)!;
-  return toApplicationForAuthor(fresh);
+  const fresh = toApplicationForAuthor((await repo.listApplicationsForListing(db, l.id)).find((x) => x.id === a.id)!);
+  return (await lftMatchEnabled(db)) ? (await match.withApplicantContacts(db, [fresh]))[0]! : fresh;
 }
 
 export async function withdrawApplication(db: D1Database, userId: string, applicationId: string) {

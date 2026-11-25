@@ -8,17 +8,19 @@ import { HttpError, readJson } from "../../http";
 import type { AdminBindings } from "../../admin/session";
 import { commentOnDispute, evidenceDownload, getDispute, resolveDispute, staffQueue, transitionDispute } from "../services/dispute-service";
 import { decideListing, hiddenListings } from "../services/lft-service";
+import { staffRequestReports } from "../services/lft-match-service";
 import { decideSlot, hiddenSlots } from "../services/scrim-service";
 import { decideProfile, hiddenProfiles } from "../services/showcase-service";
 import { evidenceResponse } from "./disputes";
 
 export const v3AdminRoutes = new Hono<AdminBindings>();
 
-const need = (flag: "v3.disputes" | "v3.lft" | "v3.profiles" | "v3.scrims") => async (c: { env: AdminBindings["Bindings"] }): Promise<void> => {
+const need = (flag: "v3.disputes" | "v3.lft" | "v3.profiles" | "v3.scrims" | "v3.lft_match") => async (c: { env: AdminBindings["Bindings"] }): Promise<void> => {
   if (!(await getFlags(c.env.DB))[flag]) throw new HttpError(404, "Not found");
 };
 const disputesOn = need("v3.disputes");
 const lftOn = need("v3.lft");
+const lftMatchOn = need("v3.lft_match");
 const profilesOn = need("v3.profiles");
 const scrimsOn = need("v3.scrims");
 const actor = (c: { get(k: "staff"): { id: string } }) => ({ kind: "staff" as const, userId: c.get("staff").id });
@@ -56,6 +58,12 @@ v3AdminRoutes.post("/v3/lft/:id/decide", async (c) => {
   const b = await readJson(c as never, 1024);
   return c.json(await decideListing(c.env.DB, c.req.param("id"), b.decision));
 });
+// Reports on requests to join (flag v3.lft_match): read only; the reported message, the reason and how often the same applicant was reported.
+v3AdminRoutes.get("/v3/lft/request-reports", async (c) => {
+  await lftOn(c);
+  await lftMatchOn(c);
+  return c.json(await staffRequestReports(c.env.DB));
+});
 
 // ---- phase 3: player profiles and team pages hidden by reports ----
 v3AdminRoutes.get("/v3/profiles/hidden", async (c) => {
@@ -87,6 +95,7 @@ export const V3_ADMIN_ROUTES: readonly { method: string; path: string }[] = [
   { method: "POST", path: "/admin/v1/v3/disputes/:id/resolve" },
   { method: "GET", path: "/admin/v1/v3/lft/hidden" },
   { method: "POST", path: "/admin/v1/v3/lft/:id/decide" },
+  { method: "GET", path: "/admin/v1/v3/lft/request-reports" },
   { method: "GET", path: "/admin/v1/v3/profiles/hidden" },
   { method: "POST", path: "/admin/v1/v3/profiles/:kind/:slug/decide" },
   { method: "GET", path: "/admin/v1/v3/scrims/hidden" },

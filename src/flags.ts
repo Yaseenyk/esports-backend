@@ -41,6 +41,9 @@ export interface Flags {
   "v3.directory": boolean; // public tournament directory: upcoming public tournaments by game and city, optional public sign-up link
   "v3.calendar": boolean; // college esports calendar (migration 0080): /public/calendar and the verified-organisation listing routes
   "v3.trust": boolean; // organiser trust score (migration 0080): proof-based ratings, reviews, replies, reports, staff moderation
+  "v3.planner": boolean; // squad availability planner (migration 0090): share-link plans, teammates vote without an account, deleted after 30 days
+  "v3.alerts": boolean; // tournament alerts (migration 0090): saved rules, double opt-in email, one digest a day at most, global daily cap
+  "v3.lft_match": boolean; // LFT team matching (migration 0090): language and play-hour filters, sort by match, chosen contacts, block and report on requests
   "feedback.enabled": boolean; // on-page feedback bot (migration 0054): /feedback routes and the staff list. OFF = 404 before any feedback table is read
 }
 
@@ -75,6 +78,9 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "v3.screenshots": false,
   "v3.calendar": false,
   "v3.trust": false,
+  "v3.planner": false,
+  "v3.alerts": false,
+  "v3.lft_match": false,
   "feedback.enabled": false,
 });
 
@@ -108,6 +114,9 @@ export const FLAG_NOTES: Readonly<Record<FlagKey, string>> = Object.freeze({
   "v3.directory": "Public tournament directory by game and city.",
   "v3.calendar": "College esports calendar: verified organisations list their events.",
   "v3.trust": "Organiser trust score: proof-based ratings, reviews, replies and reports.",
+  "v3.planner": "Squad availability planner: share-link plans, teammates tap free hours (no account), deleted after 30 days.",
+  "v3.alerts": "Tournament alerts: saved rules, double opt-in email, at most one email a day per person, capped daily.",
+  "v3.lft_match": "Team finder matching: language and play-hour filters, best-match sort, chosen contacts, block and report on requests.",
   "feedback.enabled": "On-page feedback bot and the staff feedback inbox.",
 });
 

@@ -12,6 +12,8 @@ import { resumeRoutes } from "./resume";
 import { scrimRoutes } from "./scrims";
 import { tournamentRoutes } from "./tournaments";
 import { communityRoutes } from "./community";
+import { plannerRoutes } from "./planner";
+import { alertRoutes } from "./alerts";
 
 export const v3 = new Hono<AppBindings>();
 v3.route("/", tournamentRoutes);
@@ -27,3 +29,6 @@ v3.route("/", directoryRoutes);
 // Organiser match tools (24 Nov 2026): flags v3.rooms, v3.recaps, v3.screenshots, all OFF by default.
 v3.route("/", organiserToolRoutes);
 v3.route("/", communityRoutes);
+// Builder B (25 Nov 2026, migration 0090): flags v3.planner and v3.alerts, OFF by default.
+v3.route("/", plannerRoutes);
+v3.route("/", alertRoutes);
