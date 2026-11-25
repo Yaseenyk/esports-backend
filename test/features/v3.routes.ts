@@ -90,6 +90,13 @@ const feature: FeatureRoutes = {
     { method: "GET", path: "/v3/me/player-page" },
     { method: "PUT", path: "/v3/me/player-page/visibility" },
     { method: "PUT", path: "/v3/me/player-page/hidden" },
+    // player cards (migration 0081): the indexable-slug list, the card-link page, the owner's details and card link, reports through a card link
+    { method: "GET", path: "/public/profiles/players" },
+    { method: "GET", path: "/public/profiles/cards/:token" },
+    { method: "PUT", path: "/v3/me/player-page/details" },
+    { method: "POST", path: "/v3/me/player-page/card-link" },
+    { method: "POST", path: "/v3/me/player-page/card-link/reset" },
+    { method: "POST", path: "/v3/profiles/cards/:token/report" },
     { method: "GET", path: "/v3/me/team-pages" },
     { method: "GET", path: "/v3/me/team-pages/:id" },
     { method: "PUT", path: "/v3/me/team-pages/:id/visibility" },
