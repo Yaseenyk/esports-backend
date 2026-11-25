@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { D1Migration } from "@cloudflare/vitest-pool-workers";
 import { describe, expect, it } from "vitest";
-import { applyAll, applyUpTo, foreignKeyViolations, seedLegacyWorld, snapshot } from "./world";
+import { applyUpTo, foreignKeyViolations, seedLegacyWorld, snapshot } from "./world";
 
 // 0081 (player cards): one new table and one index on top of a populated database. Additive and idempotent.
 describe("0081 player cards", () => {
@@ -10,7 +10,7 @@ describe("0081 player cards", () => {
     await seedLegacyWorld();
     const before = await snapshot();
     const tablesBefore = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name);
-    await applyAll();
+    await applyUpTo(82); // only 0081 (later files add their own tables)
     expect(await snapshot()).toEqual(before);
     const added = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name).filter((n) => !tablesBefore.includes(n));
     expect(added).toEqual(["v3_player_page_details"]);
