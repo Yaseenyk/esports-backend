@@ -23,7 +23,7 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
   const empty = <T>(): Promise<T[]> => Promise.resolve([]);
   const feedbackOk = await feedbackTablesExist(db);
   const ratingsOk = await repo.ratingTableExists(db);
-  const [account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices] = await Promise.all([
+  const [account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices, pageDetails] = await Promise.all([
     repo.accountRow(db, userId),
     has("player_profiles") ? repo.profileRow(db, userId) : Promise.resolve(null),
     has("player_games") ? repo.gameRows(db, userId) : empty<repo.GameRow>(),
@@ -42,11 +42,12 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
     has("scrim_schedules") ? manager.exportSchedules(db, userId) : empty<Awaited<ReturnType<typeof manager.exportSchedules>>[number]>(),
     has("scrim_waitlist") ? manager.exportEntries(db, userId) : empty<{ slot_id: string; status: string; created_at: number }>(),
     has("scrim_notifications") ? manager.exportNotices(db, userId) : empty<{ kind: string; created_at: number; read_at: number | null }>(),
+    has("v3_player_page_details") ? repo.pageDetailsRow(db, userId) : Promise.resolve(null),
   ]);
   const [ratingsWritten, ratingsReceived] = ratingsOk
     ? await Promise.all([repo.ratingsWrittenRows(db, userId), repo.ratingsReceivedRows(db, userId)])
     : [[] as repo.RatingWrittenRow[], [] as repo.RatingReceivedRow[]];
-  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices, ratingsWritten, ratingsReceived };
+  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices, ratingsWritten, ratingsReceived, pageDetails };
 }
 
 export { buildV3Export, MAX_TRUNCATION_LEVEL, type TruncationLevel, type V3ExportInput };

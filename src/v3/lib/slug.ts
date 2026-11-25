@@ -4,6 +4,8 @@ export const RESERVED_SLUGS: readonly string[] = [
   "tournaments", "tournament", "players", "player", "teams", "team", "lft", "looking-for-team", "looking-for-player", "disputes", "dispute", "discord",
   "public", "live", "events", "event", "games", "cities", "about", "contact", "help", "support", "terms", "privacy", "legal", "static", "assets", "null",
   "undefined", "esports", "hub", "official", "moderator", "staff", "system", "root", "streamer", "streamerosai",
+  // route names under /players/ and /p/ on the site (a profile slug becomes /players/<slug>/)
+  "view", "card", "cards", "search", "index", "sitemap", "none",
 ];
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
 

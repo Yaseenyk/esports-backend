@@ -6,7 +6,7 @@ import { addBr, addMatch, addRegistration, api, captainToken, db, flagsOn, ownTe
 vi.setConfig({ testTimeout: 120_000 });
 beforeAll(() => prodLikeOn("v3.profiles"));
 
-const PUBLIC_PLAYER_KEYS = ["battleRoyale", "bio", "certificates", "city", "games", "handle", "indexable", "kind", "languages", "matches", "slug", "state", "stats", "teams", "updatedAt", "visibility"];
+const PUBLIC_PLAYER_KEYS = ["achievements", "battleRoyale", "bio", "certificates", "city", "games", "handle", "indexable", "kind", "languages", "links", "matches", "slug", "state", "stats", "teamName", "teams", "updatedAt", "visibility"];
 const PUBLIC_TEAM_KEYS = ["battleRoyale", "blurb", "certificates", "indexable", "kind", "links", "matches", "name", "slug", "tournaments", "updatedAt", "visibility"];
 
 async function claim(u: U, slug: string, eventId: string, team: string) {
@@ -31,6 +31,7 @@ async function world(opts: { consent?: boolean; status?: string } = {}) {
   if (to === "completed") expect((await api(`/v3/events/${t.eventId}/tournament/status`, { token: t.owner.token, body: { to: "completed" } })).status).toBe(200);
   return { me, slug, t, itemKey: `${t.slug}:alpha wolves` };
 }
+const optIn = (u: U) => api("/v3/me/player-page/details", { method: "PUT", token: u.token, body: { searchOptIn: true } });
 const vis = (u: U, visibility: string) => api("/v3/me/player-page/visibility", { method: "PUT", token: u.token, body: { visibility } });
 
 describe("player profiles: privacy per profile", () => {
@@ -39,8 +40,8 @@ describe("player profiles: privacy per profile", () => {
     expect((await api(`/public/profiles/players/${w.slug}`)).status).toBe(404);
     const own = await api("/v3/me/player-page", { token: w.me.token });
     expect(own.status, own.text).toBe(200);
-    expect(own.json.page).toMatchObject({ slug: w.slug, visibility: "private", indexable: false, path: `/players/view/?s=${w.slug}` });
-    expect(own.json.page.indexBlockers).toEqual(["not_public"]);
+    expect(own.json.page).toMatchObject({ slug: w.slug, visibility: "private", indexable: false, path: null, cardPath: null });
+    expect(own.json.page.indexBlockers).toEqual(["not_public", "search_off"]);
     expect(own.json.page.entries).toHaveLength(1);
     expect(own.json.page.certificates).toHaveLength(1);
     expect(own.headers.get("cache-control")).toBe("no-store");
@@ -57,13 +58,17 @@ describe("player profiles: privacy per profile", () => {
     expect((await vis(w.me, "secret")).status).toBe(400);
   });
 
-  it("Link only: readable by link, never indexable", async () => {
+  it("Link only: readable only through the card link (never by the guessable slug), never indexable", async () => {
     const w = await world();
-    expect((await vis(w.me, "unlisted")).status).toBe(200);
-    const r = await api(`/public/profiles/players/${w.slug}`);
+    const set = await vis(w.me, "unlisted");
+    expect(set.status).toBe(200);
+    expect(set.json.page.cardPath).toMatch(/^\/p\/\?k=[A-Za-z0-9_-]{22}$/);
+    expect(set.json.page.path).toBe(set.json.page.cardPath);
+    expect((await api(`/public/profiles/players/${w.slug}`)).status).toBe(404);
+    const r = await api(`/public/profiles/cards/${set.json.page.cardPath.slice(6)}`);
     expect(r.status, r.text).toBe(200);
-    expect(r.json).toMatchObject({ visibility: "unlisted", indexable: false });
-    expect(r.headers.get("cache-control")).toBe("public, max-age=0");
+    expect(r.json).toMatchObject({ visibility: "unlisted", indexable: false, slug: null });
+    expect(r.headers.get("cache-control")).toBe("no-store");
     // the legacy resume endpoint keeps its old rule (unlisted is private there)
     expect((await api(`/public/players/${w.slug}`)).status).toBe(404);
   });
@@ -71,6 +76,8 @@ describe("player profiles: privacy per profile", () => {
   it("Public with verified results is indexable; payload has teams, matches and certificates and nothing private", async () => {
     const w = await world();
     expect((await vis(w.me, "public")).status).toBe(200);
+    expect((await api(`/public/profiles/players/${w.slug}`)).json.indexable).toBe(false); // search is off by default
+    await optIn(w.me);
     const r = await api(`/public/profiles/players/${w.slug}`);
     expect(r.status).toBe(200);
     expect(Object.keys(r.json).sort()).toEqual(PUBLIC_PLAYER_KEYS);
@@ -89,6 +96,7 @@ describe("player profiles: privacy per profile", () => {
   it("Public without verified results is not indexable; certificates need a completed tournament", async () => {
     const w = await world({ status: "live" });
     await vis(w.me, "public");
+    await optIn(w.me);
     const r = await api(`/public/profiles/players/${w.slug}`);
     expect(r.json.certificates).toEqual([]);
     expect(r.json.matches).toHaveLength(1);
@@ -97,9 +105,10 @@ describe("player profiles: privacy per profile", () => {
     await api("/v3/me/resume-consent", { token: empty.token, body: { consent: true } });
     const s2 = `e-${uniq()}`.toLowerCase();
     await api("/v3/me/profile", { method: "PUT", token: empty.token, body: { slug: s2, handle: "Empty", visibility: "public" } });
+    await optIn(empty);
     const e = await api(`/public/profiles/players/${s2}`);
     expect(e.json).toMatchObject({ indexable: false, matches: [], certificates: [], teams: [] });
-    expect((await api("/v3/me/player-page", { token: empty.token })).json.page.indexBlockers).toEqual(["no_verified_results"]);
+    expect((await api("/v3/me/player-page", { token: empty.token })).json.page.indexBlockers).toEqual(["thin_content"]);
   });
 
   it("results of a registration the organiser did not approve never count", async () => {

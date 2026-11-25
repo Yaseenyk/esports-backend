@@ -25,7 +25,7 @@ describe("0051 and 0052 on a populated database", () => {
     expect(added).toEqual([
       "calendar_entries", "calendar_entry_actions", // 0080 community
       "discord_guilds", "discord_link_codes", "discord_outbox", "dispute_events", "dispute_evidence", "dispute_evidence_blobs", "disputes", "feedback_attachment_blobs", "feedback_attachments", "feedback_reports", "lft_applications", "lft_listings", "lft_reports", "organiser_rating_actions", "organiser_rating_reports", "organiser_ratings",
-      "player_games", "player_profiles", "scrim_blocks", "scrim_notifications", "scrim_reports", "scrim_requests", "scrim_schedule_days", "scrim_schedules", "scrim_slot_assignments", "scrim_slots", "scrim_waitlist", "tournaments", "v3_discord_settings", "v3_match_rooms", "v3_player_hidden_items", "v3_profile_moderation", "v3_profile_reports",
+      "player_games", "player_profiles", "scrim_blocks", "scrim_notifications", "scrim_reports", "scrim_requests", "scrim_schedule_days", "scrim_schedules", "scrim_slot_assignments", "scrim_slots", "scrim_waitlist", "tournaments", "v3_discord_settings", "v3_match_rooms", "v3_player_hidden_items", "v3_player_page_details", "v3_profile_moderation", "v3_profile_reports",
       "v3_registration_discord", "v3_result_corrections", "v3_room_views", "v3_team_captains", "v3_team_hidden_items", "v3_team_pages", "v3_tournament_directory",
     ]);
     // the three new users columns are nullable and empty for every existing account

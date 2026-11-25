@@ -14,6 +14,9 @@ export async function seedPhases(o: { w: { slug: string; eventId: string; owner:
   ok(await api(`/v3/me/team-pages/${myTeam.id}/visibility`, { method: "PUT", token: me.token, body: { visibility: "public", consent: true } }));
   ok(await api(`/v3/me/team-pages/${myTeam.id}/hidden`, { method: "PUT", token: me.token, body: { itemKey, hidden: true } }));
   ok(await api("/v3/me/player-page/hidden", { method: "PUT", token: me.token, body: { itemKey, hidden: true } }));
+  // player card (0081): page details and a card link
+  ok(await api("/v3/me/player-page/details", { method: "PUT", token: me.token, body: { teamName: `${mark} Wolves`, achievements: [{ title: `${mark} cup winner`, year: 2026 }], hiddenFields: ["languages"] } }));
+  ok(await api("/v3/me/player-page/card-link", { token: me.token, body: {} }));
   const theirTeam = await ownTeamPage(other.id, "Beta Hawks Page");
   ok(await api(`/v3/me/team-pages/${theirTeam.id}/visibility`, { method: "PUT", token: other.token, body: { visibility: "public", consent: true } }));
   // profile reports both ways

@@ -59,6 +59,11 @@ export async function teamPageSettingRows(db: D1Database, userId: string): Promi
 export async function playerHiddenRows(db: D1Database, userId: string): Promise<{ item_key: string; created_at: number }[]> {
   return (await db.prepare("SELECT item_key, created_at FROM v3_player_hidden_items WHERE user_id = ?1 ORDER BY created_at LIMIT 200").bind(userId).all<{ item_key: string; created_at: number }>()).results;
 }
+export interface PageDetailsRow { team_name: string | null; links: string; achievements: string; hidden_fields: string; card_token_at: number | null; updated_at: number }
+/** The player's page details. The card link itself is a secret and is not selected; only when it was made. */
+export async function pageDetailsRow(db: D1Database, userId: string): Promise<PageDetailsRow | null> {
+  return (await db.prepare("SELECT team_name, links, achievements, hidden_fields, card_token_at, updated_at FROM v3_player_page_details WHERE user_id = ?1").bind(userId).first<PageDetailsRow>()) ?? null;
+}
 export async function teamHiddenRows(db: D1Database, userId: string): Promise<{ slug: string; item_key: string; created_at: number }[]> {
   return (await db.prepare("SELECT p.slug AS slug, h.item_key AS item_key, h.created_at AS created_at FROM v3_team_hidden_items h JOIN team_profiles p ON p.id = h.profile_id WHERE p.owner_user_id = ?1 ORDER BY h.created_at LIMIT 500").bind(userId).all<{ slug: string; item_key: string; created_at: number }>()).results;
 }

@@ -9,6 +9,7 @@ import * as stats from "../repositories/stats-repo";
 import * as users from "../repositories/user-repo";
 import { toOwnProfile, toPublicPlayer } from "../adapters/profile-adapter";
 import { buildResumeStats } from "../adapters/stats-adapter";
+import { deletePageDetails } from "./showcase-service";
 
 /** Resume numbers: computed on every read from verified results (never stored, never typed by the player). */
 async function statsOf(db: D1Database, userId: string) {
@@ -103,6 +104,7 @@ export async function putMyProfile(db: D1Database, userId: string, b: Body) {
 export async function deleteMyProfile(db: D1Database, userId: string) {
   await me(db, userId);
   await profiles.deleteProfile(db, userId);
+  await deletePageDetails(db, userId); // the page details and the card link go with the profile
   return { ok: true };
 }
 

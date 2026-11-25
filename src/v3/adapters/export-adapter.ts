@@ -4,6 +4,14 @@ import type { RequestExportRow, SlotExportRow } from "../repositories/scrim-repo
 import type { FeedbackExportRow } from "../repositories/feedback-repo";
 import { toIso } from "../lib/ids";
 
+const jsonList = (raw: string | null): unknown[] => {
+  try {
+    const x: unknown = JSON.parse(raw ?? "[]");
+    return Array.isArray(x) ? x.slice(0, 20) : [];
+  } catch {
+    return [];
+  }
+};
 const strings = (raw: string | null): string[] => {
   if (!raw) return [];
   try {
@@ -26,6 +34,8 @@ export interface V3ExportInput {
   waitlistEntries?: { slot_id: string; status: string; created_at: number }[]; notices?: { kind: string; created_at: number; read_at: number | null }[];
   // organiser trust (migration 0080): ratings the user wrote, and ratings of the organisations they are an admin of
   ratingsWritten?: RatingWrittenRow[]; ratingsReceived?: RatingReceivedRow[];
+  // player cards (migration 0081)
+  pageDetails?: { team_name: string | null; links: string; achievements: string; hidden_fields: string; card_token_at: number | null; updated_at: number } | null;
 }
 /** 0 = everything; 1 = feedback reduced to a count; 2 = also LFT listings, sent applications and ratings received; 3 = also raised disputes (all reduced to counts). */
 export type TruncationLevel = 0 | 1 | 2 | 3;
@@ -59,6 +69,9 @@ export function buildV3Export(i: V3ExportInput, level: TruncationLevel = 0) {
       teamPageSettings: (i.teamPages ?? []).map((t) => ({ teamPage: t.slug, name: t.name, visibility: t.visibility, publicSince: toIso(t.public_since) })),
       hiddenOnPlayerPage: (i.playerHidden ?? []).map((h) => ({ item: h.item_key, createdAt: toIso(h.created_at) })),
       hiddenOnTeamPages: (i.teamHidden ?? []).map((h) => ({ teamPage: h.slug, item: h.item_key, createdAt: toIso(h.created_at) })),
+      playerPageDetails: i.pageDetails
+        ? { teamName: i.pageDetails.team_name, links: jsonList(i.pageDetails.links), achievements: jsonList(i.pageDetails.achievements), hiddenFields: jsonList(i.pageDetails.hidden_fields), cardLinkCreatedAt: toIso(i.pageDetails.card_token_at), updatedAt: toIso(i.pageDetails.updated_at) }
+        : null,
     },
     scrims: {
       slotCount: (i.slots ?? []).length,

@@ -83,7 +83,9 @@ describe("POST /me/export, v3 section", () => {
     expect(j.v3Truncated).toBeUndefined();
     expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "lft", "profiles", "ratings", "resume", "scrims"]);
     // phases 3-5: my team page settings and hidden entries; my scrim slots, the requests I SENT and the blocks I made (not who blocked me)
-    expect(Object.keys(j.v3.profiles).sort()).toEqual(["hiddenOnPlayerPage", "hiddenOnTeamPages", "teamPageSettings"]);
+    expect(Object.keys(j.v3.profiles).sort()).toEqual(["hiddenOnPlayerPage", "hiddenOnTeamPages", "playerPageDetails", "teamPageSettings"]);
+    expect(j.v3.profiles.playerPageDetails).toEqual({ teamName: `${s.mark} Wolves`, links: [], achievements: [{ title: `${s.mark} cup winner`, year: 2026 }], hiddenFields: ["languages"], cardLinkCreatedAt: expect.any(String), updatedAt: expect.any(String) });
+    expect(r.text).not.toContain("/p/?k=");
     expect(j.v3.profiles.teamPageSettings).toEqual([{ teamPage: s.ph.myTeam.slug, name: s.ph.myTeam.name, visibility: "public", publicSince: expect.any(String) }]);
     expect(j.v3.profiles.hiddenOnPlayerPage).toEqual([{ item: s.ph.itemKey, createdAt: expect.any(String) }]);
     expect(j.v3.profiles.hiddenOnTeamPages).toEqual([{ teamPage: s.ph.myTeam.slug, item: s.ph.itemKey, createdAt: expect.any(String) }]);
@@ -137,7 +139,7 @@ describe("POST /me/export, v3 section", () => {
       v3_team_captains: (v) => v.disputes.captainClaims.length, feedback_reports: (v) => v.feedback.reports.length,
       feedback_attachments: () => "screenshots are not listed for feedback, only the report; the attachment bytes and tokens are never exported",
       v3_team_pages: (v) => v.profiles.teamPageSettings.length, v3_player_hidden_items: (v) => v.profiles.hiddenOnPlayerPage.length,
-      v3_team_hidden_items: (v) => v.profiles.hiddenOnTeamPages.length, scrim_slots: (v) => v.scrims.slots.length,
+      v3_team_hidden_items: (v) => v.profiles.hiddenOnTeamPages.length, v3_player_page_details: (v) => v.profiles.playerPageDetails, scrim_slots: (v) => v.scrims.slots.length,
       scrim_requests: (v) => v.scrims.sentRequests.length, scrim_blocks: (v) => v.scrims.blocksMade.length,
       scrim_waitlist: (v) => v.scrims.waitlist.length, scrim_notifications: (v) => v.scrims.notices.length, scrim_schedules: (v) => v.scrims.schedules.length,
     };
@@ -190,7 +192,7 @@ describe("POST /me/export, v3 section", () => {
       lft: { listingCount: 0, listings: [], applicationsReceivedTotal: 0, sentApplicationCount: 0, sentApplications: [] },
       disputes: { raisedCount: 0, raised: [], evidenceOnOtherDisputes: [], captainClaims: [] },
       feedback: { reportCount: 0, reports: [] },
-      profiles: { teamPageSettings: [], hiddenOnPlayerPage: [], hiddenOnTeamPages: [] },
+      profiles: { teamPageSettings: [], hiddenOnPlayerPage: [], hiddenOnTeamPages: [], playerPageDetails: null },
       scrims: { slotCount: 0, slots: [], sentRequestCount: 0, sentRequests: [], blocksMade: [], schedules: [], waitlist: [], notices: [] },
       ratings: { writtenCount: 0, written: [], receivedCount: 0, received: [] },
     });

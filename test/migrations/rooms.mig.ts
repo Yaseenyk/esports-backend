@@ -13,7 +13,7 @@ describe("0070 match rooms", () => {
     await applyAll();
     expect(await snapshot()).toEqual(before);
     const added = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all<{ name: string }>()).results.map((r) => r.name).filter((n) => !tablesBefore.includes(n)).sort();
-    expect(added.filter((n) => !/^(calendar_entr|organiser_rating)/.test(n))).toEqual(["v3_match_rooms", "v3_room_views"]); // 0080 (community) is checked in community.mig.ts
+    expect(added.filter((n) => !/^(calendar_entr|organiser_rating)/.test(n))).toEqual(["v3_match_rooms", "v3_player_page_details", "v3_room_views"]); // 0080 (community) is checked in community.mig.ts; 0081 (player cards) in player-cards.mig.ts
     expect(await foreignKeyViolations()).toEqual([]);
     const schema = async () => JSON.stringify((await env.DB.prepare("SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").all()).results);
     const s1 = await schema();

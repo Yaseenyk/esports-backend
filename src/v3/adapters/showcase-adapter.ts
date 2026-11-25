@@ -5,6 +5,8 @@
  * dispute corrections applied through the same overlay the tournament page uses. Opponents that did not choose to be public show as "Unlisted team".
  */
 import { toIso } from "../lib/ids";
+import type { Achievement, HideableField, PlayerLink } from "../lib/player-details";
+import { playerSeoBlockers, type PlayerSeoInput } from "../lib/player-seo";
 import type { GameRow, ProfileRow } from "../repositories/profile-repo";
 import type { EntryRow, PublicTeamKeyRow, ShowBrRow, ShowCorrectionRow, ShowMatchRow, TeamPageRow } from "../repositories/showcase-repo";
 import type { StatBrRow, StatMatchRow } from "../repositories/stats-repo";
@@ -183,22 +185,45 @@ function publicRows(s: Showcase) {
 /** Indexable = the owner chose Public AND the page has verified results to show. Anything else ships noindex. */
 export const isIndexable = (visibility: PageVisibility, s: Pick<Showcase, "hasVerifiedContent">): boolean => visibility === "public" && s.hasVerifiedContent;
 
-export function toPublicPlayerPage(p: ProfileRow, games: GameRow[], stats: ResumeStats, s: Showcase, teams: ReturnType<typeof playerTeams>) {
+/** The player's own additions to the page (migration 0081), already parsed and re-validated by lib/player-details. */
+export interface PageDetails { teamName: string | null; links: PlayerLink[]; achievements: Achievement[]; hidden: readonly HideableField[]; searchOptIn: boolean; searchSince: number | null }
+export const NO_DETAILS: PageDetails = { teamName: null, links: [], achievements: [], hidden: [], searchOptIn: false, searchSince: null };
+
+/** The quality-gate input as the PUBLIC sees the page: a hidden bio, hidden games or hidden results do not count. */
+export function playerSeoInputOf(p: ProfileRow, games: number, s: Pick<Showcase, "matches" | "battleRoyale" | "certificates">, d: PageDetails): PlayerSeoInput {
+  const off = new Set<HideableField>(d.hidden);
+  const shownRows = s.matches.filter((m) => !m.hidden).length + s.battleRoyale.filter((b) => !b.hidden).length;
+  const results = (off.has("matches") ? 0 : shownRows) + (off.has("certificates") ? 0 : s.certificates.filter((c) => !c.hidden).length);
+  return { visibility: p.visibility, searchOptIn: d.searchOptIn, bio: off.has("bio") ? null : p.bio, games: off.has("games") ? 0 : games, verifiedResults: results };
+}
+
+/**
+ * The public player page. Every field the owner switched off is emptied HERE (null or []), so a hidden value never leaves the Worker.
+ * `slug` is null unless the profile is Public: a Link only profile opens through its card link alone.
+ */
+export function toPublicPlayerPage(p: ProfileRow, games: GameRow[], stats: ResumeStats, s: Showcase, teams: ReturnType<typeof playerTeams>, d: PageDetails = NO_DETAILS) {
   const visibility = p.visibility as PageVisibility;
+  const off = new Set<HideableField>(d.hidden);
+  const rows = publicRows(s);
   return {
     kind: "player" as const,
-    slug: p.slug,
+    slug: visibility === "public" ? p.slug : null,
     handle: p.handle,
-    bio: p.bio,
-    city: p.city,
-    state: p.state,
-    languages: parseStrings(p.languages),
-    games: games.map(toGameOut),
-    stats,
+    bio: off.has("bio") ? null : p.bio,
+    city: off.has("location") ? null : p.city,
+    state: off.has("location") ? null : p.state,
+    languages: off.has("languages") ? [] : parseStrings(p.languages),
+    games: off.has("games") ? [] : games.map(toGameOut).map((g) => (off.has("roles") ? { ...g, roles: [] } : g)),
+    teamName: off.has("team") ? null : d.teamName,
+    links: off.has("links") ? [] : d.links.map((l) => ({ kind: l.kind, url: l.url })),
+    achievements: off.has("achievements") ? [] : d.achievements.map((a) => ({ title: a.title, year: a.year })),
+    stats: off.has("stats") ? null : stats,
     visibility,
-    indexable: isIndexable(visibility, s),
-    teams,
-    ...publicRows(s),
+    indexable: playerSeoBlockers(playerSeoInputOf(p, games.length, s, d)).length === 0, // the quality gate (lib/player-seo.ts)
+    teams: off.has("teams") ? [] : teams,
+    matches: off.has("matches") ? [] : rows.matches,
+    battleRoyale: off.has("matches") ? [] : rows.battleRoyale,
+    certificates: off.has("certificates") ? [] : rows.certificates,
     updatedAt: toIso(p.updatedAt),
   };
 }
@@ -229,12 +254,24 @@ export function indexBlockers(visibility: PageVisibility, s: Pick<Showcase, "has
   return out;
 }
 
-export function toOwnPlayerPage(p: ProfileRow, s: Showcase, extra: { blockers: string[]; moderationHidden: boolean; teams: ReturnType<typeof playerTeams> }) {
+/**
+ * The owner's view. `path` is where the shared page opens: the slug address when Public, the card link when Link only (null until one exists).
+ * `cardPath` is the card link (the QR value) whatever the visibility; null until the owner creates one.
+ */
+export function toOwnPlayerPage(
+  p: ProfileRow, s: Showcase,
+  extra: { blockers: string[]; moderationHidden: boolean; teams: ReturnType<typeof playerTeams>; details?: PageDetails; cardPath?: string | null; cardCreatedAt?: number | null },
+) {
   const visibility = p.visibility as PageVisibility;
+  const d = extra.details ?? NO_DETAILS;
+  const cardPath = extra.cardPath ?? null;
   return {
     slug: p.slug,
     visibility,
-    path: `/players/view/?s=${p.slug}`,
+    path: visibility === "public" ? `/players/view/?s=${p.slug}` : visibility === "unlisted" ? cardPath : null,
+    cardPath,
+    cardCreatedAt: toIso(extra.cardCreatedAt ?? null),
+    details: { teamName: d.teamName, links: d.links, achievements: d.achievements, hiddenFields: [...d.hidden], searchOptIn: d.searchOptIn },
     indexable: extra.blockers.length === 0,
     indexBlockers: extra.blockers,
     hiddenByModeration: extra.moderationHidden,

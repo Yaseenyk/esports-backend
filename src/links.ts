@@ -6,7 +6,7 @@
 // the backfill fills the two new columns (phase A) and the deferred phase B script overwrites it.
 import { b64url, fromB64url, randomToken } from "./crypto";
 
-export type LinkKind = "share" | "invite" | "regform";
+export type LinkKind = "share" | "invite" | "regform" | "pcard";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

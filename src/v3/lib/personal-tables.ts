@@ -46,5 +46,7 @@ export const V3_PERSONAL_TABLES: Record<string, { deletion: DeletionMode; export
   v3_match_rooms: { deletion: "unlinked", export: "none", why: "organiser-owned room details for an event; created_by is nulled and the credentials are encrypted and deleted 24 hours after the start" },
   v3_room_views: { deletion: "cascade", export: "none", why: "the organiser's audit log of who revealed a room; it holds no text the user wrote and is deleted with the account" },
   scrim_schedule_days: { deletion: "cascade", export: "none", why: "the day list generated from the user's schedule (the schedule itself is exported)" },
+  // Player cards (migration 0081): page details the player typed and the card link (only its creation time is exported, never the token or its hash)
+  v3_player_page_details: { deletion: "cascade", export: "included" },
 };
 export const V3_TABLE_NAMES = Object.keys(V3_PERSONAL_TABLES);
