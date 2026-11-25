@@ -7,7 +7,7 @@ vi.setConfig({ testTimeout: 120_000 });
 beforeAll(() => prodLikeOn("v3.profiles"));
 
 /** The exact key set of the public player JSON (card link and slug routes share one builder). Adding a key must be a deliberate change here. */
-const PUBLIC_KEYS = ["achievements", "battleRoyale", "bio", "certificates", "city", "games", "handle", "indexable", "kind", "languages", "links", "matches", "slug", "state", "stats", "teamName", "teams", "updatedAt", "visibility"];
+const PUBLIC_KEYS = ["achievements", "badges", "battleRoyale", "bio", "certificates", "city", "games", "handle", "indexable", "kind", "languages", "links", "matches", "slug", "state", "stats", "teamName", "teams", "updatedAt", "visibility"];
 const TOKEN_PATH = /^\/p\/\?k=([A-Za-z0-9_-]{22})$/;
 
 async function player(opts: { visibility?: "private" | "unlisted" | "public"; consent?: boolean; name?: string } = {}) {

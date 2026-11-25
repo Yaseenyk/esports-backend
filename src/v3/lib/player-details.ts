@@ -34,7 +34,7 @@ const HOSTS: Record<Exclude<LinkKind, "website">, readonly string[]> = {
 const BLOCKED_HOSTS = ["wa.me", "whatsapp.com", "api.whatsapp.com", "chat.whatsapp.com", "t.me", "telegram.me"];
 
 /** Fields the player can hide from the public page (the owner screen shows one switch each). */
-export const HIDEABLE_FIELDS = ["bio", "location", "languages", "games", "roles", "team", "links", "achievements", "stats", "teams", "certificates", "matches"] as const;
+export const HIDEABLE_FIELDS = ["bio", "location", "languages", "games", "roles", "team", "links", "achievements", "stats", "teams", "certificates", "matches", "badges"] as const;
 export type HideableField = (typeof HIDEABLE_FIELDS)[number];
 
 export interface PlayerLink { kind: LinkKind; url: string }

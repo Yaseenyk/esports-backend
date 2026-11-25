@@ -48,5 +48,8 @@ export const V3_PERSONAL_TABLES: Record<string, { deletion: DeletionMode; export
   scrim_schedule_days: { deletion: "cascade", export: "none", why: "the day list generated from the user's schedule (the schedule itself is exported)" },
   // Player cards (migration 0081): page details the player typed and the card link (only its creation time is exported, never the token or its hash)
   v3_player_page_details: { deletion: "cascade", export: "included" },
+  // Builder C (migration 0091): the private match journal and the badge show/hide choices (+ the server's record of a scrim badge)
+  v3_journal_entries: { deletion: "cascade", export: "included" },
+  v3_badge_state: { deletion: "cascade", export: "included" },
 };
 export const V3_TABLE_NAMES = Object.keys(V3_PERSONAL_TABLES);

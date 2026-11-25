@@ -30,9 +30,10 @@ import * as tournaments from "../repositories/tournament-repo";
 import * as users from "../repositories/user-repo";
 import {
   buildShowcase, indexBlockers, itemKeyOf, NO_DETAILS, playerTeams, teamVisibility, toOwnPlayerPage, toOwnTeamPage, toPublicPlayerPage, toPublicTeamPage, type PageDetails,
-  type PageVisibility, playerSeoInputOf,
+  type PageVisibility, playerSeoInputOf, type Showcase,
 } from "../adapters/showcase-adapter";
-import { buildResumeStats } from "../adapters/stats-adapter";
+import { buildResumeStats, type ResumeStats } from "../adapters/stats-adapter";
+import { ownBadgeView, publicBadgesOf, type VerifiedBase } from "./badge-service";
 
 type Body = Record<string, unknown>;
 
@@ -65,14 +66,30 @@ async function detailsOf(db: D1Database, userId: string): Promise<{ details: Pag
   return { details: { teamName: row.team_name, links: storedLinks(row.links), achievements: storedAchievements(row.achievements), hidden: storedHidden(row.hidden_fields), searchOptIn: row.search_opt_in_at !== null, searchSince: row.search_opt_in_at }, row };
 }
 
+/** The public showcase and verified stats of an account (hidden entries excluded), as every public page and the badges see them. */
+async function publicShowcaseOf(db: D1Database, userId: string) {
+  const [entries, hidden] = await Promise.all([repo.captainEntries(db, userId), repo.playerHiddenKeys(db, userId)]);
+  const s = await showcaseFor(db, entries, hidden, false);
+  const corrections = entries.length ? await repo.correctionsForEvents(db, JSON.stringify([...new Set(entries.map((e) => e.event_id))])) : [];
+  return { s, stats: buildResumeStats(s.statRows.matches, s.statRows.br, corrections) };
+}
+
+/** The verified part of the badge facts (lib/badges.ts): tournaments shown, verified stats, whether a card link was made. */
+const verifiedBase = (s: Showcase, stats: ResumeStats, row: cards.DetailsRow | null): VerifiedBase => ({ tournaments: s.entries.length, stats, cardCreated: !!row?.card_token_at });
+
 /** A shared page for this profile row. The caller has already checked visibility, consent, 18+, account status and moderation. */
 async function buildPublicPlayer(db: D1Database, profile: ProfileRow) {
   const userId = profile.userId;
-  const [entries, hidden, games, teamPages, d] = await Promise.all([repo.captainEntries(db, userId), repo.playerHiddenKeys(db, userId), profiles.listGames(db, userId), repo.visibleTeamPagesOf(db, userId), detailsOf(db, userId)]);
-  const s = await showcaseFor(db, entries, hidden, false);
-  const corrections = entries.length ? await repo.correctionsForEvents(db, JSON.stringify([...new Set(entries.map((e) => e.event_id))])) : [];
-  const stats = buildResumeStats(s.statRows.matches, s.statRows.br, corrections);
-  return toPublicPlayerPage(profile, games, stats, s, playerTeams(s.entries, teamPages), d.details);
+  const [{ s, stats }, games, teamPages, d] = await Promise.all([publicShowcaseOf(db, userId), profiles.listGames(db, userId), repo.visibleTeamPagesOf(db, userId), detailsOf(db, userId)]);
+  const badges = await publicBadgesOf(db, userId, verifiedBase(s, stats, d.row), d.details.hidden.includes("badges"));
+  return toPublicPlayerPage(profile, games, stats, s, playerTeams(s.entries, teamPages), d.details, badges);
+}
+
+/** GET /v3/me/badges (flag v3.achievements): every badge with its rule, earned or not, and the owner's show/hide choices. */
+export async function myBadges(env: CardEnv, userId: string) {
+  await me(env.DB, userId);
+  const [{ s, stats }, d] = await Promise.all([publicShowcaseOf(env.DB, userId), detailsOf(env.DB, userId)]);
+  return ownBadgeView(env.DB, userId, verifiedBase(s, stats, d.row), d.details.hidden.includes("badges"));
 }
 
 /**

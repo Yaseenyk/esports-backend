@@ -29,7 +29,7 @@ const FORBIDDEN_KEY = /ip_?hash|token|hash|sha|blob|^data$|^bytes$|attach|passwo
 
 /** One row of personal data in every v3 table, like test/v3/deletion.test.ts. `me` is a captain; `other` is the other team captain. */
 async function seed() {
-  await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.profiles", "v3.scrims", "v3.directory", "takedown.enforce");
+  await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.profiles", "v3.scrims", "v3.directory", "v3.journal", "v3.achievements", "takedown.enforce");
   const mark = `XMARK${uniq()}`;
   const rid = `rbm${uniq()}`;
   const gid = `guild${uniq()}`;
@@ -81,9 +81,12 @@ describe("POST /me/export, v3 section", () => {
     const j = r.json;
     expect(j.exportVersion).toBe(2);
     expect(j.v3Truncated).toBeUndefined();
-    expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "lft", "profiles", "ratings", "resume", "scrims"]);
+    expect(Object.keys(j.v3).sort()).toEqual(["disputes", "feedback", "journal", "lft", "profiles", "ratings", "resume", "scrims"]);
+    // builder C (0091): the private journal is exported in full, labelled self-logged; badge choices are listed
+    expect(j.v3.journal).toMatchObject({ selfLogged: true, entryCount: 1, entries: [{ playedOn: "2026-11-20", game: "bgmi", kills: 7, placement: 2, notes: `${s.mark} journal note` }] });
+    expect(j.v3.profiles.badgeSettings).toEqual([{ badge: "first_win", hidden: true, recordedAt: null, updatedAt: expect.any(String) }]);
     // phases 3-5: my team page settings and hidden entries; my scrim slots, the requests I SENT and the blocks I made (not who blocked me)
-    expect(Object.keys(j.v3.profiles).sort()).toEqual(["hiddenOnPlayerPage", "hiddenOnTeamPages", "playerPageDetails", "teamPageSettings"]);
+    expect(Object.keys(j.v3.profiles).sort()).toEqual(["badgeSettings", "hiddenOnPlayerPage", "hiddenOnTeamPages", "playerPageDetails", "teamPageSettings"]);
     expect(j.v3.profiles.playerPageDetails).toEqual({ teamName: `${s.mark} Wolves`, links: [], achievements: [{ title: `${s.mark} cup winner`, year: 2026 }], hiddenFields: ["languages"], cardLinkCreatedAt: expect.any(String), updatedAt: expect.any(String) });
     expect(r.text).not.toContain("/p/?k=");
     expect(j.v3.profiles.teamPageSettings).toEqual([{ teamPage: s.ph.myTeam.slug, name: s.ph.myTeam.name, visibility: "public", publicSince: expect.any(String) }]);
@@ -141,6 +144,7 @@ describe("POST /me/export, v3 section", () => {
       v3_team_pages: (v) => v.profiles.teamPageSettings.length, v3_player_hidden_items: (v) => v.profiles.hiddenOnPlayerPage.length,
       v3_team_hidden_items: (v) => v.profiles.hiddenOnTeamPages.length, v3_player_page_details: (v) => v.profiles.playerPageDetails, scrim_slots: (v) => v.scrims.slots.length,
       scrim_requests: (v) => v.scrims.sentRequests.length, scrim_blocks: (v) => v.scrims.blocksMade.length,
+      v3_journal_entries: (v) => v.journal.entries.length, v3_badge_state: (v) => v.profiles.badgeSettings.length,
       scrim_waitlist: (v) => v.scrims.waitlist.length, scrim_notifications: (v) => v.scrims.notices.length, scrim_schedules: (v) => v.scrims.schedules.length,
     };
     for (const [t, c] of Object.entries(V3_PERSONAL_TABLES)) {
@@ -192,7 +196,8 @@ describe("POST /me/export, v3 section", () => {
       lft: { listingCount: 0, listings: [], applicationsReceivedTotal: 0, sentApplicationCount: 0, sentApplications: [] },
       disputes: { raisedCount: 0, raised: [], evidenceOnOtherDisputes: [], captainClaims: [] },
       feedback: { reportCount: 0, reports: [] },
-      profiles: { teamPageSettings: [], hiddenOnPlayerPage: [], hiddenOnTeamPages: [], playerPageDetails: null },
+      profiles: { teamPageSettings: [], hiddenOnPlayerPage: [], hiddenOnTeamPages: [], playerPageDetails: null, badgeSettings: [] },
+      journal: { selfLogged: true, entryCount: 0, entries: [] },
       scrims: { slotCount: 0, slots: [], sentRequestCount: 0, sentRequests: [], blocksMade: [], schedules: [], waitlist: [], notices: [] },
       ratings: { writtenCount: 0, written: [], receivedCount: 0, received: [] },
     });

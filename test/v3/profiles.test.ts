@@ -6,7 +6,7 @@ import { addBr, addMatch, addRegistration, api, captainToken, db, flagsOn, ownTe
 vi.setConfig({ testTimeout: 120_000 });
 beforeAll(() => prodLikeOn("v3.profiles"));
 
-const PUBLIC_PLAYER_KEYS = ["achievements", "battleRoyale", "bio", "certificates", "city", "games", "handle", "indexable", "kind", "languages", "links", "matches", "slug", "state", "stats", "teamName", "teams", "updatedAt", "visibility"];
+const PUBLIC_PLAYER_KEYS = ["achievements", "badges", "battleRoyale", "bio", "certificates", "city", "games", "handle", "indexable", "kind", "languages", "links", "matches", "slug", "state", "stats", "teamName", "teams", "updatedAt", "visibility"];
 const PUBLIC_TEAM_KEYS = ["battleRoyale", "blurb", "certificates", "indexable", "kind", "links", "matches", "name", "slug", "tournaments", "updatedAt", "visibility"];
 
 async function claim(u: U, slug: string, eventId: string, team: string) {

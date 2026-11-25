@@ -14,6 +14,7 @@ import { tournamentRoutes } from "./tournaments";
 import { communityRoutes } from "./community";
 import { plannerRoutes } from "./planner";
 import { alertRoutes } from "./alerts";
+import { journalRoutes } from "./journal";
 
 export const v3 = new Hono<AppBindings>();
 v3.route("/", tournamentRoutes);
@@ -32,3 +33,5 @@ v3.route("/", communityRoutes);
 // Builder B (25 Nov 2026, migration 0090): flags v3.planner and v3.alerts, OFF by default.
 v3.route("/", plannerRoutes);
 v3.route("/", alertRoutes);
+// Builder C (25 Nov 2026, migration 0091): flags v3.journal and v3.achievements, OFF by default.
+v3.route("/", journalRoutes);

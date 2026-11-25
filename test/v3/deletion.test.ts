@@ -16,7 +16,7 @@ const dump = async (t: string) => JSON.stringify((await db.prepare(`SELECT * FRO
 
 describe("account deletion covers every v3 table", () => {
   it("one row of personal data in every new table for a user; deleting the account leaves none of it", async () => {
-    await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.profiles", "v3.scrims", "v3.directory", "takedown.enforce");
+    await flagsOn("v3.tournaments", "v3.resume", "v3.lft", "v3.disputes", "v3.profiles", "v3.scrims", "v3.directory", "v3.journal", "v3.achievements", "takedown.enforce");
     const mark = `MARK${uniq()}`;
     const w = await disputeWorld();
     const me = w.a; // captain of Alpha Wolves

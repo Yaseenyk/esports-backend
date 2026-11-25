@@ -7,6 +7,9 @@
 import * as repo from "../repositories/export-repo";
 import * as scrims from "../repositories/scrim-repo";
 import * as manager from "../repositories/scrim-manager-repo";
+import * as journal from "../repositories/journal-repo";
+import * as badges from "../repositories/badge-repo";
+import { JOURNAL } from "../lib/journal";
 import { feedbackRows, feedbackTablesExist, type FeedbackExportRow } from "../repositories/feedback-repo";
 import { buildV3Export, MAX_TRUNCATION_LEVEL, type TruncationLevel, type V3ExportInput } from "../adapters/export-adapter";
 
@@ -44,10 +47,14 @@ export async function loadV3Export(db: D1Database, userId: string): Promise<V3Ex
     has("scrim_notifications") ? manager.exportNotices(db, userId) : empty<{ kind: string; created_at: number; read_at: number | null }>(),
     has("v3_player_page_details") ? repo.pageDetailsRow(db, userId) : Promise.resolve(null),
   ]);
+  const [journalRows, badgeRows] = await Promise.all([
+    has("v3_journal_entries") ? journal.listEntries(db, userId, JOURNAL.MAX_ENTRIES) : empty<journal.JournalRow>(),
+    has("v3_badge_state") ? badges.stateRows(db, userId) : empty<badges.BadgeStateRow>(),
+  ]);
   const [ratingsWritten, ratingsReceived] = ratingsOk
     ? await Promise.all([repo.ratingsWrittenRows(db, userId), repo.ratingsReceivedRows(db, userId)])
     : [[] as repo.RatingWrittenRow[], [] as repo.RatingReceivedRow[]];
-  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices, ratingsWritten, ratingsReceived, pageDetails };
+  return { account, profile, games, listings, sent, disputes, evidence, captains, feedback, teamPages, playerHidden, teamHidden, slots, scrimRequests, blocks, schedules, waitlistEntries, notices, ratingsWritten, ratingsReceived, pageDetails, journal: journalRows, badges: badgeRows };
 }
 
 export { buildV3Export, MAX_TRUNCATION_LEVEL, type TruncationLevel, type V3ExportInput };

@@ -201,7 +201,10 @@ export function playerSeoInputOf(p: ProfileRow, games: number, s: Pick<Showcase,
  * The public player page. Every field the owner switched off is emptied HERE (null or []), so a hidden value never leaves the Worker.
  * `slug` is null unless the profile is Public: a Link only profile opens through its card link alone.
  */
-export function toPublicPlayerPage(p: ProfileRow, games: GameRow[], stats: ResumeStats, s: Showcase, teams: ReturnType<typeof playerTeams>, d: PageDetails = NO_DETAILS) {
+export function toPublicPlayerPage(
+  p: ProfileRow, games: GameRow[], stats: ResumeStats, s: Showcase, teams: ReturnType<typeof playerTeams>, d: PageDetails = NO_DETAILS,
+  badges: readonly { id: string; title: string }[] = [],
+) {
   const visibility = p.visibility as PageVisibility;
   const off = new Set<HideableField>(d.hidden);
   const rows = publicRows(s);
@@ -224,6 +227,8 @@ export function toPublicPlayerPage(p: ProfileRow, games: GameRow[], stats: Resum
     matches: off.has("matches") ? [] : rows.matches,
     battleRoyale: off.has("matches") ? [] : rows.battleRoyale,
     certificates: off.has("certificates") ? [] : rows.certificates,
+    // Server badges (flag v3.achievements; [] when off): earned from recorded actions only, hidden ones already removed by services/badge-service.ts.
+    badges: off.has("badges") ? [] : badges.map((b) => ({ id: b.id, title: b.title })),
     updatedAt: toIso(p.updatedAt),
   };
 }

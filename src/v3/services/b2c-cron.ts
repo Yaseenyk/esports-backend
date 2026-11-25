@@ -2,6 +2,7 @@
 import type { Env } from "../../types";
 import { purgeAlerts, runDigestTick } from "./alert-service";
 import { purgeExpiredPlans } from "./planner-service";
+import { recordBadgesDaily } from "./badge-service";
 
 /** True for the one 15-minute tick that starts at 03:00 UTC (same slot as the existing daily housekeeping). */
 const isDailyTick = (ms: number): boolean => {
@@ -14,6 +15,7 @@ export async function runB2cCron(env: Env, scheduledTime: number): Promise<void>
     const now = Math.floor(scheduledTime / 1000);
     await purgeExpiredPlans(env.DB, now);
     await purgeAlerts(env.DB, now);
+    await recordBadgesDaily(env.DB, now); // before the scrim rows are deleted 7 days after their start
     return;
   }
   await runDigestTick(env, { nowMs: scheduledTime });

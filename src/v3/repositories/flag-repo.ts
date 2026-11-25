@@ -24,3 +24,5 @@ export async function alertFlags(db: D1Database): Promise<{ alerts: boolean; kil
 export const mailKilled = (db: D1Database): Promise<boolean> => getFlagFresh(db, "kill.mail");
 /** Flag v3.lft_match (cached read): language and play-hour filters, match sort, chosen contacts, blocks and request reports on the board. */
 export const lftMatchEnabled = (db: D1Database): Promise<boolean> => getFlag(db, "v3.lft_match");
+/** Flag v3.achievements (cached read): server badges on player pages and the owner's badge screen. */
+export const achievementsEnabled = (db: D1Database): Promise<boolean> => getFlag(db, "v3.achievements");

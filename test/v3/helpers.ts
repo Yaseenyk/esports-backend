@@ -9,7 +9,7 @@ export const db = env.DB;
 export const nowSec = () => Math.floor(Date.now() / 1000);
 const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
 
-export type V3Flag = "v3.tournaments" | "v3.resume" | "v3.lft" | "v3.disputes" | "v3.discord" | "v3.profiles" | "v3.scrims" | "v3.directory" | "v3.rooms" | "v3.recaps" | "v3.screenshots" | "takedown.enforce" | "kill.directory" | "kill.public_writes" | "kill.uploads";
+export type V3Flag = "v3.tournaments" | "v3.resume" | "v3.lft" | "v3.disputes" | "v3.discord" | "v3.profiles" | "v3.scrims" | "v3.directory" | "v3.rooms" | "v3.recaps" | "v3.screenshots" | "v3.journal" | "v3.achievements" | "takedown.enforce" | "kill.directory" | "kill.public_writes" | "kill.uploads";
 
 /** Turns exactly the listed flags ON (every other v3 flag is removed = default OFF) and forgets the isolate cache. */
 export async function flagsOn(...on: V3Flag[]): Promise<void> {

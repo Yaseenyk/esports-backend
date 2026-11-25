@@ -43,6 +43,8 @@ export interface Flags {
   "v3.trust": boolean; // organiser trust score (migration 0080): proof-based ratings, reviews, replies, reports, staff moderation
   "v3.planner": boolean; // squad availability planner (migration 0090): share-link plans, teammates vote without an account, deleted after 30 days
   "v3.alerts": boolean; // tournament alerts (migration 0090): saved rules, double opt-in email, one digest a day at most, global daily cap
+  "v3.journal": boolean; // personal match journal (migration 0091): private, owner-only self-logged matches, progress charts, CSV export
+  "v3.achievements": boolean; // server badges (migration 0091): earned only from recorded actions, per-badge show/hide, on player pages
   "v3.lft_match": boolean; // LFT team matching (migration 0090): language and play-hour filters, sort by match, chosen contacts, block and report on requests
   "feedback.enabled": boolean; // on-page feedback bot (migration 0054): /feedback routes and the staff list. OFF = 404 before any feedback table is read
 }
@@ -81,6 +83,8 @@ export const FLAG_DEFAULTS: Readonly<Flags> = Object.freeze({
   "v3.planner": false,
   "v3.alerts": false,
   "v3.lft_match": false,
+  "v3.journal": false,
+  "v3.achievements": false,
   "feedback.enabled": false,
 });
 
@@ -116,6 +120,8 @@ export const FLAG_NOTES: Readonly<Record<FlagKey, string>> = Object.freeze({
   "v3.trust": "Organiser trust score: proof-based ratings, reviews, replies and reports.",
   "v3.planner": "Squad availability planner: share-link plans, teammates tap free hours (no account), deleted after 30 days.",
   "v3.alerts": "Tournament alerts: saved rules, double opt-in email, at most one email a day per person, capped daily.",
+  "v3.journal": "Personal match journal: private self-logged matches with weekly and monthly charts and CSV export.",
+  "v3.achievements": "Player badges earned only from recorded actions (results, scrims, events, card), shown on player pages.",
   "v3.lft_match": "Team finder matching: language and play-hour filters, best-match sort, chosen contacts, block and report on requests.",
   "feedback.enabled": "On-page feedback bot and the staff feedback inbox.",
 });

@@ -2,6 +2,8 @@
 import type { AccountV3Row, CaptainRow, DisputeRow, EvidenceMetaRow, GameRow, ListingRow, ProfileRow, RatingReceivedRow, RatingWrittenRow, SentApplicationRow, TeamPageSettingRow } from "../repositories/export-repo";
 import type { RequestExportRow, SlotExportRow } from "../repositories/scrim-repo";
 import type { FeedbackExportRow } from "../repositories/feedback-repo";
+import type { JournalRow } from "../repositories/journal-repo";
+import type { BadgeStateRow } from "../repositories/badge-repo";
 import { toIso } from "../lib/ids";
 
 const jsonList = (raw: string | null): unknown[] => {
@@ -36,8 +38,10 @@ export interface V3ExportInput {
   ratingsWritten?: RatingWrittenRow[]; ratingsReceived?: RatingReceivedRow[];
   // player cards (migration 0081)
   pageDetails?: { team_name: string | null; links: string; achievements: string; hidden_fields: string; card_token_at: number | null; updated_at: number } | null;
+  // builder C (migration 0091): the private match journal and badge show/hide choices
+  journal?: JournalRow[]; badges?: BadgeStateRow[];
 }
-/** 0 = everything; 1 = feedback reduced to a count; 2 = also LFT listings, sent applications and ratings received; 3 = also raised disputes (all reduced to counts). */
+/** 0 = everything; 1 = feedback reduced to a count; 2 = also LFT listings, sent applications, ratings received and journal entries; 3 = also raised disputes (all reduced to counts). */
 export type TruncationLevel = 0 | 1 | 2 | 3;
 export const MAX_TRUNCATION_LEVEL: TruncationLevel = 3;
 
@@ -72,6 +76,12 @@ export function buildV3Export(i: V3ExportInput, level: TruncationLevel = 0) {
       playerPageDetails: i.pageDetails
         ? { teamName: i.pageDetails.team_name, links: jsonList(i.pageDetails.links), achievements: jsonList(i.pageDetails.achievements), hiddenFields: jsonList(i.pageDetails.hidden_fields), cardLinkCreatedAt: toIso(i.pageDetails.card_token_at), updatedAt: toIso(i.pageDetails.updated_at) }
         : null,
+      badgeSettings: (i.badges ?? []).map((b) => ({ badge: b.badge_id, hidden: b.hidden === 1, recordedAt: toIso(b.recorded_at), updatedAt: toIso(b.updated_at) })),
+    },
+    journal: {
+      selfLogged: true,
+      entryCount: (i.journal ?? []).length,
+      entries: level >= 2 ? [] : (i.journal ?? []).map((e) => ({ id: e.id, playedOn: e.played_on, game: e.game, mode: e.mode, map: e.map, placement: e.placement, kills: e.kills, damage: e.damage, notes: e.notes, createdAt: toIso(e.created_at), updatedAt: toIso(e.updated_at) })),
     },
     scrims: {
       slotCount: (i.slots ?? []).length,
