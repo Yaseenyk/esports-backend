@@ -68,9 +68,10 @@ export async function vote(db: D1Database, b: Body) {
   const name = label(b.name, "name", PLANNER.NAME_MAX, true);
   const picks = checkPicks(b.picks, intList(p.slots).length);
   if (!picks) throw bad("picks must be a list of slot numbers from this plan", "invalid_picks");
-  const r = await repo.upsertVote(db, { id: newId(), planId: p.id, editKeyHash: await sha256(b.editKey), name, picks: JSON.stringify(picks), at: now }, PLANNER.MAX_VOTERS);
+  const keyHash = await sha256(b.editKey);
+  const r = await repo.upsertVote(db, { id: newId(), planId: p.id, editKeyHash: keyHash, name, picks: JSON.stringify(picks), at: now }, PLANNER.MAX_VOTERS);
   if (r === "full") throw new HttpError(409, `This plan already has ${PLANNER.MAX_VOTERS} people`, { code: "plan_full" });
-  return toPlanView(p, await repo.listVotes(db, p.id));
+  return { ...toPlanView(p, await repo.listVotes(db, p.id)), mine: await repo.voteIdByKey(db, p.id, keyHash) };
 }
 
 export async function unvote(db: D1Database, b: Body) {

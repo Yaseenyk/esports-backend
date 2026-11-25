@@ -52,6 +52,11 @@ export async function upsertVote(db: D1Database, v: { id: string; planId: string
   return (again.meta?.changes ?? 0) === 1 ? "updated" : "full";
 }
 
+/** The id of the row an edit key owns (so the browser can find its own answers in the list). */
+export async function voteIdByKey(db: D1Database, planId: string, editKeyHash: string): Promise<string | null> {
+  return (await db.prepare("SELECT id FROM squad_plan_votes WHERE plan_id = ?1 AND edit_key_hash = ?2").bind(planId, editKeyHash).first<{ id: string }>())?.id ?? null;
+}
+
 export async function deleteVote(db: D1Database, planId: string, editKeyHash: string): Promise<boolean> {
   const r = await db.prepare("DELETE FROM squad_plan_votes WHERE plan_id = ?1 AND edit_key_hash = ?2").bind(planId, editKeyHash).run();
   return (r.meta?.changes ?? 0) === 1;

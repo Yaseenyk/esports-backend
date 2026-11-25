@@ -20,7 +20,7 @@ export async function findSub(db: D1Database, userId: string): Promise<SubRow | 
 }
 
 export async function listRules(db: D1Database, userId: string): Promise<RuleRow[]> {
-  return (await db.prepare("SELECT id, game, place, kind FROM alert_rules WHERE user_id = ?1 ORDER BY created_at, id LIMIT 10").bind(userId).all<RuleRow>()).results;
+  return (await db.prepare("SELECT id, game, place, kind FROM alert_rules WHERE user_id = ?1 ORDER BY created_at, rowid LIMIT 10").bind(userId).all<RuleRow>()).results;
 }
 
 /** Replaces the account's rules in one batch. */
